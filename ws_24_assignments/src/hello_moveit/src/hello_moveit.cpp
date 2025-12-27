@@ -102,6 +102,8 @@ int main(int argc, char * argv[]) {
 
     static const std::string FRAME_ID = "base_link";
     static const std::string PLANNING_GROUP = "ir_arm";
+    static const std::string GRIPPER_GROUP = "ir_gripper";
+    moveit::planning_interface::MoveGroupInterface gripper_group(node, GRIPPER_GROUP);
     moveit::planning_interface::MoveGroupInterface move_group(node, PLANNING_GROUP);
     moveit::planning_interface::MoveGroupInterface::Plan my_plan;
 
@@ -216,7 +218,7 @@ int main(int argc, char * argv[]) {
     // modify the pose: move down in z and forward in x
     pose.pose.position.x = tag1_pos[0] + 0.03;
     pose.pose.position.y = tag1_pos[1] + 0.4;
-    pose.pose.position.z = tag1_pos[2];
+    pose.pose.position.z = tag1_pos[2] - 0.05;
 
     tf2::Quaternion q_attuale;
     tf2::fromMsg(pose.pose.orientation, q_attuale);
@@ -249,13 +251,38 @@ int main(int argc, char * argv[]) {
     pose.header.frame_id = FRAME_ID; // ensure correct frame
 
     move_group.setPoseTarget(pose);
+    
+    int attempt_count = 1;
+    auto res = move_group.plan(my_plan);
+    while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
+        res = move_group.plan(my_plan);
+        std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
+        attempt_count++;
+    } 
 
+
+    if (res == moveit::core::MoveItErrorCode::SUCCESS ){
+        RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
+        move_group.execute(my_plan);RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
+    }else{
+        RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
+    }
+
+    // Opening the gripper.
+    gripper_group.setNamedTarget("open");
+    gripper_group.move(); 
+
+    pose.pose.position.y += 0.1;
+    move_group.setPoseTarget(pose);
     if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
         RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
         move_group.execute(my_plan);
     } else {
         RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
     }
+
+
+
 //
 //    ///////////////////////////////////////////////////////////
 //    ////////////// introduce a collision object ///////////////
