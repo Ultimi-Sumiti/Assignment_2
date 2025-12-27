@@ -201,14 +201,7 @@ int main(int argc, char * argv[]) {
 //    move_group.setPlanningTime(20.0);                    // set planning time
 //
 //    if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
-//        RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
-//        move_group.execute(my_plan);
-//    } else {
-//        RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
-//    }
-//
-//    move_group.clearPathConstraints(); // clear path constraints after use
-//
+
     ///////////////////////////////////////////////////////////
     ///////////////// move in cartesian space /////////////////
     ///////////////////////////////////////////////////////////
@@ -217,8 +210,8 @@ int main(int argc, char * argv[]) {
     
     // modify the pose: move down in z and forward in x
     pose.pose.position.x = tag1_pos[0] + 0.03;
-    pose.pose.position.y = tag1_pos[1] + 0.4;
-    pose.pose.position.z = tag1_pos[2] - 0.05;
+    pose.pose.position.y = tag1_pos[1] + 0.18;
+    pose.pose.position.z = tag1_pos[2] + 0.1;
 
     tf2::Quaternion q_attuale;
     tf2::fromMsg(pose.pose.orientation, q_attuale);
@@ -263,7 +256,7 @@ int main(int argc, char * argv[]) {
 
     if (res == moveit::core::MoveItErrorCode::SUCCESS ){
         RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
-        move_group.execute(my_plan);RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
+        move_group.execute(my_plan);
     }else{
         RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
     }
@@ -272,12 +265,24 @@ int main(int argc, char * argv[]) {
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
-    pose.pose.position.y += 0.1;
+    pose.pose.position.z -= 0.13;
     move_group.setPoseTarget(pose);
-    if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
+
+    // 2. Ciclo di pianificazione (Usa la stessa variabile 'res' dichiarata prima nel main)
+    attempt_count = 1; // Resetta il contatore
+    res = move_group.plan(my_plan); // Prima prova di pianificazione
+
+    while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
+        res = move_group.plan(my_plan);
+        std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
+        attempt_count++;
+    }
+
+    // 3. Esecuzione e azione finale sul gripper
+    if (res == moveit::core::MoveItErrorCode::SUCCESS) {
         RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
         move_group.execute(my_plan);
-    } else {
+    }else{
         RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
     }
 
