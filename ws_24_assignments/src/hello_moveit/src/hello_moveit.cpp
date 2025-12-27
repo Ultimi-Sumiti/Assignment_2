@@ -1,9 +1,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/node_options.hpp>
 #include <memory>
-#include <thread>
+#include <thread> 
 #include <chrono>
-
 // MoveIt Headers
 #include <moveit/move_group_interface/move_group_interface.hpp>
 #include <moveit/robot_state/robot_state.hpp>
@@ -55,17 +54,17 @@ class TryNode : public rclcpp::Node
             T_tag1_base = this->tf_buffer_->lookupTransform(
                 base_frame_, tag1_frame_, tf2::TimePointZero, std::chrono::milliseconds(100)); // Timeout breve per non bloccare
             
-            T_tag10_base = this->tf_buffer_->lookupTransform(
-                base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
+            //T_tag10_base = this->tf_buffer_->lookupTransform(
+            //    base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
 
             // Salviamo i risultati nei vettori passati dal main
             tag1_xyz[0] = T_tag1_base.transform.translation.x;
             tag1_xyz[1] = T_tag1_base.transform.translation.y;
             tag1_xyz[2] = T_tag1_base.transform.translation.z;
 
-            tag10_xyz[0] = T_tag10_base.transform.translation.x;
-            tag10_xyz[1] = T_tag10_base.transform.translation.y;
-            tag10_xyz[2] = T_tag10_base.transform.translation.z;
+            //tag10_xyz[0] = T_tag10_base.transform.translation.x;
+            //tag10_xyz[1] = T_tag10_base.transform.translation.y;
+            //tag10_xyz[2] = T_tag10_base.transform.translation.z;
             
             return true; // Successo
 
@@ -84,6 +83,33 @@ class TryNode : public rclcpp::Node
     const std::string base_frame_;
 };
 
+
+void plan_execute(
+        moveit::planning_interface::MoveGroupInterface& group, 
+        moveit::planning_interface::MoveGroupInterface::Plan& plan,
+        const geometry_msgs::msg::PoseStamped& pose,
+        const rclcpp::Logger& LOGGER
+    ) {
+    // Set target pose.
+    group.setPoseTarget(pose);
+    
+    // Try to define a plan: max 10 attempts.
+    int attempt_count = 1;
+    auto res = group.plan(plan);
+    while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
+        res = group.plan(plan);
+        std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
+        attempt_count++;
+    } 
+
+    // Try to execute the defined plan.
+    if (res == moveit::core::MoveItErrorCode::SUCCESS) {
+        RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
+        group.execute(plan);
+    } else {
+        RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
+    }
+}
 
 
 // Main function
@@ -110,7 +136,7 @@ int main(int argc, char * argv[]) {
     move_group.setMaxVelocityScalingFactor(1.0);        // set max velocity scaling factor
     move_group.setMaxAccelerationScalingFactor(1.0);    // set max acceleration scaling factor
 
-    move_group.setPlanningTime(5.0);                    // set planning time
+    move_group.setPlanningTime(15.0);                    // set planning time
 
 
     geometry_msgs::msg::PoseStamped p = move_group.getCurrentPose();
@@ -136,6 +162,7 @@ int main(int argc, char * argv[]) {
         if(tf_receiver_node->get_tags_position(tag1_pos, tag10_pos)) {
             tags_found = true;
             RCLCPP_INFO(LOGGER, "Tags Found! Tag1: [%.2f, %.2f, %.2f]", tag1_pos[0], tag1_pos[1], tag1_pos[2]);
+            RCLCPP_INFO(LOGGER, "Tags Found! Tag10: [%.2f, %.2f, %.2f]", tag10_pos[0], tag10_pos[1], tag10_pos[2]);
         } else {
             RCLCPP_WARN(LOGGER, "Transforms not available yet, retrying...");
             std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -205,88 +232,73 @@ int main(int argc, char * argv[]) {
     ///////////////////////////////////////////////////////////
     ///////////////// move in cartesian space /////////////////
     ///////////////////////////////////////////////////////////
+
+
+    // ### STEP 1: Approach tag1 ###
     // get current end-effector pose in cartesian space
     geometry_msgs::msg::PoseStamped pose = move_group.getCurrentPose();
     
-    // modify the pose: move down in z and forward in x
+    // set new pose based on position of tag1
     pose.pose.position.x = tag1_pos[0] + 0.03;
-    pose.pose.position.y = tag1_pos[1] + 0.18;
-    pose.pose.position.z = tag1_pos[2] + 0.1;
+    pose.pose.position.y = tag1_pos[1] + 0.25;
+    pose.pose.position.z = tag1_pos[2] - 0.05;
 
+    // define orientation (hard-coded):
+
+    // first get the current orientation (wrt base_link).
     tf2::Quaternion q_attuale;
     tf2::fromMsg(pose.pose.orientation, q_attuale);
 
-    // 2. Crea la rotazione di 180° su Z (M_PI radianti)
+    // define new desired orientation
     tf2::Quaternion q_rotazione;
     q_rotazione.setRPY(0, M_PI, 0 ); // <--- DEVE ESSERE M_PI, non 0
 
-    // 3. Calcola il nuovo orientamento
+    // compute new orientation by composition of rotations
     tf2::Quaternion q_finale = q_attuale * q_rotazione;
     q_finale.normalize();
 
-    // 4. Copia i valori manualmente (evita errori di toMsg/template)
+    // set final desired values
     pose.pose.orientation.x = q_finale.x();
     pose.pose.orientation.y = q_finale.y();
     pose.pose.orientation.z = q_finale.z();
     pose.pose.orientation.w = q_finale.w();
-    //pose.pose.orientation.w = 1.0;
-    //pose.pose.orientation.x = 0.0;
-    //pose.pose.orientation.y = 0.0;
-    //pose.pose.orientation.z = 1.0;
+    pose.header.frame_id = FRAME_ID;
 
-//    pose.pose.position.x += 10.0;
-//    pose.pose.position.y += 10.0;
-//    pose.pose.position.z += 10.0;
+    plan_execute(move_group, my_plan, pose, LOGGER);
 
-//    pose.pose.position.x = 0.3;
-//    pose.pose.position.z -= 0.2;
-
-    pose.header.frame_id = FRAME_ID; // ensure correct frame
-
-    move_group.setPoseTarget(pose);
-    
-    int attempt_count = 1;
-    auto res = move_group.plan(my_plan);
-    while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
-        res = move_group.plan(my_plan);
-        std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
-        attempt_count++;
-    } 
-
-
-    if (res == moveit::core::MoveItErrorCode::SUCCESS ){
-        RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
-        move_group.execute(my_plan);
-    }else{
-        RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
-    }
-
-    // Opening the gripper.
+    // ### STEP 2: Open gripper and get close to tag1 ###
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
-    pose.pose.position.z -= 0.13;
+    pose.pose.position.y -= 0.1;
     move_group.setPoseTarget(pose);
+    plan_execute(move_group, my_plan, pose, LOGGER);
 
-    // 2. Ciclo di pianificazione (Usa la stessa variabile 'res' dichiarata prima nel main)
-    attempt_count = 1; // Resetta il contatore
-    res = move_group.plan(my_plan); // Prima prova di pianificazione
+    // ### STEP 3: Close gripper a little bit to grab tag1 ###
+    gripper_group.setJointValueTarget("robotiq_85_left_knuckle_joint", to_rad(5));
+    gripper_group.move(); 
 
-    while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
-        res = move_group.plan(my_plan);
-        std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
-        attempt_count++;
-    }
+    // ### STEP 4: Move up ee ###
+    pose.pose.position.z += 0.2;
+    plan_execute(move_group, my_plan, pose, LOGGER);
 
-    // 3. Esecuzione e azione finale sul gripper
-    if (res == moveit::core::MoveItErrorCode::SUCCESS) {
-        RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
-        move_group.execute(my_plan);
-    }else{
-        RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
-    }
+    // ## STEP 5: Move towards tag10 ###
+    // pos = [0.56, -0.02, 0.68]
+    //pose.pose.position.x = 0.56;
+    //pose.pose.position.y = -0.02;
+    //pose.pose.position.z = 0.68
 
+    //q_rotazione.setRPY(0, M_PI/2, 0 ); // <--- DEVE ESSERE M_PI, non 0
+    //q_finale = q_attuale * q_rotazione;
+    //q_finale.normalize();
 
+    //// set final desired values
+    //pose.pose.orientation.x = q_finale.x();
+    //pose.pose.orientation.y = q_finale.y();
+    //pose.pose.orientation.z = q_finale.z();
+    //pose.pose.orientation.w = q_finale.w();
+    //pose.header.frame_id = FRAME_ID;
+    //plan_execute(move_group, my_plan, pose, LOGGER);
 
 //
 //    ///////////////////////////////////////////////////////////
