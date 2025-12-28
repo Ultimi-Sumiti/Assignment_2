@@ -83,6 +83,11 @@ class TryNode : public rclcpp::Node
     const std::string base_frame_;
 };
 
+struct BoxConfig {
+    std::string id;
+    double width, depth, height;
+    double x_offset, y_offset, z_offset;
+};
 
 void plan_execute(
         moveit::planning_interface::MoveGroupInterface& group, 
@@ -232,36 +237,45 @@ int main(int argc, char * argv[]) {
 
     geometry_msgs::msg::PoseStamped pose = move_group.getCurrentPose();
     
-    // add a collision object (a box) into the planning scene
-    moveit_msgs::msg::CollisionObject table1_object;
-    table1_object.header.frame_id = FRAME_ID;
-    table1_object.id = "box1";
+    std::vector<BoxConfig> boxes_to_add = {
+    {"table_1", 0.4, 0.4, 0.35, tag1_pos[0] + 0.025,tag1_pos[1] + 0.025, tag1_pos[2] - 0.1 - (0.35)/2},
+    {"tag_1", 0.05, 0.05, 0.1, tag1_pos[0] + 0.025, tag1_pos[1] - 0.025, tag1_pos[2] - 0.1 + (0.1)/2}
+    // ID, Width, Depth, Height, OffsetX, OffsetY, OffsetZ
+    };
 
-    shape_msgs::msg::SolidPrimitive primitive;
-    double width_table_ = 0.4;
-    double height = 0.35;
-    double depth = 0.4;
-    // Define the size of the box in meters
-    primitive.type = primitive.BOX;
-    primitive.dimensions.resize(3);
-    primitive.dimensions[primitive.BOX_X] = width;
-    primitive.dimensions[primitive.BOX_Y] = depth;
-    primitive.dimensions[primitive.BOX_Z] = height;
+    std::vector<moveit_msgs::msg::CollisionObject> collision_objects;
 
-    // Define the pose of the box (relative to the frame_id)
-    geometry_msgs::msg::Pose box_pose;
-    box_pose.orientation.w = 1.0;
-    box_pose.position.x = tag1_pos[0] + 0.025  ;
-    box_pose.position.y = tag1_pos[1] + 0.025 ;
-    box_pose.position.z = tag1_pos[2] - 0.1 - height/2;
+    for (const auto& config : boxes_to_add) {
+        moveit_msgs::msg::CollisionObject obj;
+        obj.header.frame_id = FRAME_ID;
+        obj.id = config.id;
 
-    table1_object.primitives.push_back(primitive);
-    table1_object.primitive_poses.push_back(box_pose);
-    table1_object.operation = table1_object.ADD;
+        // Definizione della forma
+        shape_msgs::msg::SolidPrimitive primitive;
+        primitive.type = primitive.BOX;
+        primitive.dimensions.resize(3);
+        primitive.dimensions[primitive.BOX_X] = config.width;
+        primitive.dimensions[primitive.BOX_Y] = config.depth;
+        primitive.dimensions[primitive.BOX_Z] = config.height;
 
-    // Add the collision object to the scene
+        // Definizione della posa
+        geometry_msgs::msg::Pose b_pose; // Usiamo Pose, non PoseStamped
+        b_pose.orientation.w = 1.0;
+        b_pose.position.x = config.x_offset;
+        b_pose.position.y = config.y_offset;
+        // Calcolo della Z: posizione del tag + offset - metà altezza per centrare il box
+        b_pose.position.z = config.z_offset;
+
+        obj.primitives.push_back(primitive);
+        obj.primitive_poses.push_back(b_pose);
+        obj.operation = obj.ADD;
+
+        collision_objects.push_back(obj);
+    }
+
+    // Applichiamo tutti gli oggetti alla scena in una volta sola
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-    planning_scene_interface.applyCollisionObject(table1_object);
+    planning_scene_interface.addCollisionObjects(collision_objects);
 
     ///////////////////////////////////////////////////////////
     ///////////////// move in cartesian space /////////////////
@@ -270,8 +284,8 @@ int main(int argc, char * argv[]) {
     // get current end-effector pose in cartesian space
     // set new pose based on position of tag1
     pose.pose.position.x = tag1_pos[0] + 0.03;
-    pose.pose.position.y = tag1_pos[1] + 0.25;
-    pose.pose.position.z = tag1_pos[2] - 0.05;
+    pose.pose.position.y = tag1_pos[1] + 0.25 - 0.08;
+    pose.pose.position.z = tag1_pos[2] - 0.05 + 0.2;
 
     // define orientation (hard-coded):
 
@@ -300,9 +314,12 @@ int main(int argc, char * argv[]) {
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
-    pose.pose.position.y -= 0.1;
-    move_group.setPoseTarget(pose);
+
+    pose.pose.position.z -= 0.2;
     plan_execute(move_group, my_plan, pose, LOGGER);
+    //pose.pose.position.y -= 0.1;
+    //move_group.setPoseTarget(pose);
+    //plan_execute(move_group, my_plan, pose, LOGGER);
 
     // ### STEP 3: Close gripper a little bit to grab tag1 ###
     gripper_group.setJointValueTarget("robotiq_85_left_knuckle_joint", to_rad(5));
