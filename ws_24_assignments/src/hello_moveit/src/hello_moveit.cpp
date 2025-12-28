@@ -281,6 +281,20 @@ int main(int argc, char * argv[]) {
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     planning_scene_interface.addCollisionObjects(collision_objects);
 
+
+    moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
+
+    // 2. Definisci il valore per il 4° giunto (wrist_1_joint)
+    double joint_4_target = to_rad(-177.0); 
+
+    // 3. Modifica solo il valore di quel giunto nello stato
+    // Assicurati che il nome "wrist_1_joint" sia corretto nel tuo URDF
+    current_state->setJointPositions("wrist_1_joint", &joint_4_target);
+
+    // 4. Imposta questo stato modificato come target dei giunti
+    // Questo dice al solutore IK: "Cerca di stare il più vicino possibile a questa configurazione"
+    move_group.setJointValueTarget(*current_state);
+
     ///////////////////////////////////////////////////////////
     ///////////////// move in cartesian space /////////////////
     ///////////////////////////////////////////////////////////
@@ -289,7 +303,7 @@ int main(int argc, char * argv[]) {
     // set new pose based on position of tag1
     pose.pose.position.x = tag1_pos[0] + 0.03;
     pose.pose.position.y = tag1_pos[1] + 0.25 - 0.08;
-    pose.pose.position.z = tag1_pos[2] - 0.05 + 0.2;
+    pose.pose.position.z = tag1_pos[2] + 0.04;
 
     // define orientation (hard-coded):
 
@@ -313,13 +327,23 @@ int main(int argc, char * argv[]) {
     pose.header.frame_id = FRAME_ID;
 
     plan_execute(move_group, my_plan, pose, LOGGER);
+    std::vector<std::string> joint_names = move_group.getJointNames();
+    std::vector<double> current_joint_values = move_group.getCurrentJointValues();
+
+    RCLCPP_INFO(LOGGER, "--- Valori Correnti dei Giunti ---");
+    for (size_t i = 0; i < joint_names.size(); ++i) {
+        RCLCPP_INFO(LOGGER, "Giunto %s: %f rad (%.2f deg)", 
+                    joint_names[i].c_str(), 
+                    current_joint_values[i], 
+                    current_joint_values[i] * 180.0 / M_PI);
+    }
 
     // ### STEP 2: Open gripper and get close to tag1 ###
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
 
-    pose.pose.position.z -= 0.2;
+    pose.pose.position.z -= 0.08;
     plan_execute(move_group, my_plan, pose, LOGGER);
     //pose.pose.position.y -= 0.1;
     //move_group.setPoseTarget(pose);
@@ -332,6 +356,46 @@ int main(int argc, char * argv[]) {
     // ### STEP 4: Move up ee ###
     pose.pose.position.z += 0.2;
     plan_execute(move_group, my_plan, pose, LOGGER);
+
+    double initial_wrist_3_val = move_group.getCurrentJointValues()[5];
+    moveit_msgs::msg::JointConstraint jc3;
+    jc3.joint_name = "wrist_3_joint"; // Assicurati che il nome corrisponda al tuo URDF
+    jc3.position = to_rad(initial_wrist_3_val);
+    jc3.tolerance_above = to_rad(5.0); // Tolleranza stretta per tenerlo "fisso"
+    jc3.tolerance_below = to_rad(5.0);
+    jc3.weight = 1.0;
+
+    // 2. Crea l'oggetto Constraints e aggiungi il vincolo del giunto
+    moveit_msgs::msg::Constraints path_constraints;
+    path_constraints.name = "lock_wrist_3";
+    path_constraints.joint_constraints.push_back(jc3);
+
+    // 3. Applica il vincolo al move_group
+    // Questo influenzerà TUTTO il percorso calcolato da plan()
+    //move_group.setPathConstraints(path_constraints);
+   
+    pose.pose.position.x = tag10_pos[0];
+    pose.pose.position.y = tag10_pos[1];
+    pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
+
+    tf2::fromMsg(pose.pose.orientation, q_attuale);
+
+    // define new desired orientation
+    q_rotazione.setRPY(0, 3*M_PI/2, 0 ); // <--- DEVE ESSERE M_PI, non 0
+
+    // compute new orientation by composition of rotations
+    q_finale = q_attuale * q_rotazione;
+    q_finale.normalize();
+
+    // set final desired values
+    pose.pose.orientation.x = q_finale.x();
+    pose.pose.orientation.y = q_finale.y();
+    pose.pose.orientation.z = q_finale.z();
+    pose.pose.orientation.w = q_finale.w();
+    pose.header.frame_id = FRAME_ID;
+
+    plan_execute(move_group, my_plan, pose, LOGGER);
+    move_group.clearPathConstraints();
 
     // ## STEP 5: Move towards tag10 ###
     // pos = [0.56, -0.02, 0.68]
@@ -373,17 +437,6 @@ int main(int argc, char * argv[]) {
 //    }
 //
 
-
-    std::vector<std::string> joint_names = move_group.getJointNames();
-    std::vector<double> current_joint_values = move_group.getCurrentJointValues();
-
-    RCLCPP_INFO(LOGGER, "--- Valori Correnti dei Giunti ---");
-    for (size_t i = 0; i < joint_names.size(); ++i) {
-        RCLCPP_INFO(LOGGER, "Giunto %s: %f rad (%.2f deg)", 
-                    joint_names[i].c_str(), 
-                    current_joint_values[i], 
-                    current_joint_values[i] * 180.0 / M_PI);
-    }
     RCLCPP_INFO(LOGGER, "Process finished. Shutting down.");
     rclcpp::shutdown();
     return 0;
