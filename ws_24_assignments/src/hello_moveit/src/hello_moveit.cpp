@@ -229,15 +229,45 @@ int main(int argc, char * argv[]) {
 //
 //    if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
 
+
+    geometry_msgs::msg::PoseStamped pose = move_group.getCurrentPose();
+    
+    // add a collision object (a box) into the planning scene
+    moveit_msgs::msg::CollisionObject table1_object;
+    table1_object.header.frame_id = FRAME_ID;
+    table1_object.id = "box1";
+
+    shape_msgs::msg::SolidPrimitive primitive;
+    double width_table_ = 0.4;
+    double height = 0.35;
+    double depth = 0.4;
+    // Define the size of the box in meters
+    primitive.type = primitive.BOX;
+    primitive.dimensions.resize(3);
+    primitive.dimensions[primitive.BOX_X] = width;
+    primitive.dimensions[primitive.BOX_Y] = depth;
+    primitive.dimensions[primitive.BOX_Z] = height;
+
+    // Define the pose of the box (relative to the frame_id)
+    geometry_msgs::msg::Pose box_pose;
+    box_pose.orientation.w = 1.0;
+    box_pose.position.x = tag1_pos[0] + 0.025  ;
+    box_pose.position.y = tag1_pos[1] + 0.025 ;
+    box_pose.position.z = tag1_pos[2] - 0.1 - height/2;
+
+    table1_object.primitives.push_back(primitive);
+    table1_object.primitive_poses.push_back(box_pose);
+    table1_object.operation = table1_object.ADD;
+
+    // Add the collision object to the scene
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+    planning_scene_interface.applyCollisionObject(table1_object);
+
     ///////////////////////////////////////////////////////////
     ///////////////// move in cartesian space /////////////////
     ///////////////////////////////////////////////////////////
-
-
     // ### STEP 1: Approach tag1 ###
     // get current end-effector pose in cartesian space
-    geometry_msgs::msg::PoseStamped pose = move_group.getCurrentPose();
-    
     // set new pose based on position of tag1
     pose.pose.position.x = tag1_pos[0] + 0.03;
     pose.pose.position.y = tag1_pos[1] + 0.25;
@@ -304,36 +334,7 @@ int main(int argc, char * argv[]) {
 //    ///////////////////////////////////////////////////////////
 //    ////////////// introduce a collision object ///////////////
 //    ///////////////////////////////////////////////////////////
-//    // add a collision object (a box) into the planning scene
-//    moveit_msgs::msg::CollisionObject collision_object;
-//    collision_object.header.frame_id = FRAME_ID;
-//    collision_object.id = "box1";
-//
-//    shape_msgs::msg::SolidPrimitive primitive;
-//    double width = 0.05;
-//    double height = 0.3;
-//    double depth = 0.3;
-//    // Define the size of the box in meters
-//    primitive.type = primitive.BOX;
-//    primitive.dimensions.resize(3);
-//    primitive.dimensions[primitive.BOX_X] = width;
-//    primitive.dimensions[primitive.BOX_Y] = depth;
-//    primitive.dimensions[primitive.BOX_Z] = height;
-//
-//    // Define the pose of the box (relative to the frame_id)
-//    geometry_msgs::msg::Pose box_pose;
-//    box_pose.orientation.w = 1.0;
-//    box_pose.position.x = 0.0 + (width / 2.0);
-//    box_pose.position.y = pose.pose.position.y + (depth / 2.0) - 0.1;
-//    box_pose.position.z = pose.pose.position.z;
-//
-//    collision_object.primitives.push_back(primitive);
-//    collision_object.primitive_poses.push_back(box_pose);
-//    collision_object.operation = collision_object.ADD;
-//
-//    // Add the collision object to the scene
-//    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-//    planning_scene_interface.applyCollisionObject(collision_object);
+ 
 //
 //    ///////////////////////////////////////////////////////////
 //    /////// move in cartesian space avoiding collision ////////
