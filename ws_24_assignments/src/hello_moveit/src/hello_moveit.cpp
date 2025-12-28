@@ -298,11 +298,16 @@ int main(int argc, char * argv[]) {
     ///////////////////////////////////////////////////////////
     ///////////////// move in cartesian space /////////////////
     ///////////////////////////////////////////////////////////
-    // ### STEP 1: Approach tag1 ###
+
+    // ### Step 1: Open grip ###
+    gripper_group.setNamedTarget("open");
+    gripper_group.move(); 
+
+    // ### STEP 2: Approach tag1 ###
     // get current end-effector pose in cartesian space
     // set new pose based on position of tag1
     pose.pose.position.x = tag1_pos[0] + 0.03;
-    pose.pose.position.y = tag1_pos[1] + 0.25 - 0.08;
+    pose.pose.position.y = tag1_pos[1] + 0.16;
     pose.pose.position.z = tag1_pos[2] + 0.04;
 
     // define orientation (hard-coded):
@@ -337,10 +342,6 @@ int main(int argc, char * argv[]) {
                     current_joint_values[i], 
                     current_joint_values[i] * 180.0 / M_PI);
     }
-
-    // ### STEP 2: Open gripper and get close to tag1 ###
-    gripper_group.setNamedTarget("open");
-    gripper_group.move(); 
 
 
     pose.pose.position.z -= 0.08;
