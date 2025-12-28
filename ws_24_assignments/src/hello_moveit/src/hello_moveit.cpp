@@ -54,17 +54,17 @@ class TryNode : public rclcpp::Node
             T_tag1_base = this->tf_buffer_->lookupTransform(
                 base_frame_, tag1_frame_, tf2::TimePointZero, std::chrono::milliseconds(100)); // Timeout breve per non bloccare
             
-            //T_tag10_base = this->tf_buffer_->lookupTransform(
-            //    base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
+            T_tag10_base = this->tf_buffer_->lookupTransform(
+                base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
 
             // Salviamo i risultati nei vettori passati dal main
             tag1_xyz[0] = T_tag1_base.transform.translation.x;
             tag1_xyz[1] = T_tag1_base.transform.translation.y;
             tag1_xyz[2] = T_tag1_base.transform.translation.z;
 
-            //tag10_xyz[0] = T_tag10_base.transform.translation.x;
-            //tag10_xyz[1] = T_tag10_base.transform.translation.y;
-            //tag10_xyz[2] = T_tag10_base.transform.translation.z;
+            tag10_xyz[0] = T_tag10_base.transform.translation.x;
+            tag10_xyz[1] = T_tag10_base.transform.translation.y;
+            tag10_xyz[2] = T_tag10_base.transform.translation.z;
             
             return true; // Successo
 
@@ -239,7 +239,9 @@ int main(int argc, char * argv[]) {
     
     std::vector<BoxConfig> boxes_to_add = {
     {"table_1", 0.4, 0.4, 0.35, tag1_pos[0] + 0.025,tag1_pos[1] + 0.025, tag1_pos[2] - 0.1 - (0.35)/2},
-    {"tag_1", 0.05, 0.05, 0.1, tag1_pos[0] + 0.025, tag1_pos[1] - 0.025, tag1_pos[2] - 0.1 + (0.1)/2}
+    {"tag_1", 0.05, 0.05, 0.1, tag1_pos[0] + 0.025, tag1_pos[1] - 0.025, tag1_pos[2] - 0.1 + (0.1)/2},
+    {"table_2", 0.4, 0.4, 0.35, tag10_pos[0] + 0.025,tag10_pos[1] + 0.025, tag10_pos[2] - 0.1 - (0.35)/2},
+    {"tag_2", 0.05, 0.05, 0.1, tag10_pos[0] + 0.025, tag10_pos[1] - 0.025, tag10_pos[2] - 0.1 + (0.1)/2}
     // ID, Width, Depth, Height, OffsetX, OffsetY, OffsetZ
     };
 
