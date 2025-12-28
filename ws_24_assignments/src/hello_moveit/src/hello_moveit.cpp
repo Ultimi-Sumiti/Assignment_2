@@ -3,6 +3,8 @@
 #include <memory>
 #include <thread> 
 #include <chrono>
+#include <vector>
+#include <string.h>
 // MoveIt Headers
 #include <moveit/move_group_interface/move_group_interface.hpp>
 #include <moveit/robot_state/robot_state.hpp>
@@ -371,6 +373,17 @@ int main(int argc, char * argv[]) {
 //    }
 //
 
+
+    std::vector<std::string> joint_names = move_group.getJointNames();
+    std::vector<double> current_joint_values = move_group.getCurrentJointValues();
+
+    RCLCPP_INFO(LOGGER, "--- Valori Correnti dei Giunti ---");
+    for (size_t i = 0; i < joint_names.size(); ++i) {
+        RCLCPP_INFO(LOGGER, "Giunto %s: %f rad (%.2f deg)", 
+                    joint_names[i].c_str(), 
+                    current_joint_values[i], 
+                    current_joint_values[i] * 180.0 / M_PI);
+    }
     RCLCPP_INFO(LOGGER, "Process finished. Shutting down.");
     rclcpp::shutdown();
     return 0;
