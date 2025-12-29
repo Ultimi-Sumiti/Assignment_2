@@ -457,7 +457,43 @@ int main(int argc, char * argv[]) {
     pose.pose.position.y = tag10_pos[1] + 0.008;
     plan_execute_cartesian(move_group, pose, LOGGER);
 
-    pose.pose.position.z -=0.2;
+    pose.pose.position.z -=0.1;
+    plan_execute_cartesian(move_group, pose, LOGGER);
+
+    gripper_group.setJointValueTarget("robotiq_85_left_knuckle_joint", to_rad(5));
+    gripper_group.move(); 
+
+    pose.pose.position.z +=0.1;
+    plan_execute_cartesian(move_group, pose, LOGGER);
+
+    pose.pose.position.x = tag1_pos[0] + 0.03;
+    pose.pose.position.y = tag1_pos[1] + 0.16;
+
+    // Compute new desired orientation.
+    tf2::fromMsg(pose.pose.orientation, q_attuale);
+    q_rotazione.setRPY(0, -3*M_PI/2, 0 );
+
+    // compute new orientation by composition of rotations
+    q_finale = q_attuale * q_rotazione;
+    q_finale.normalize();
+
+    // set final desired values
+    pose.pose.orientation.x = q_finale.x();
+    pose.pose.orientation.y = q_finale.y();
+    pose.pose.orientation.z = q_finale.z();
+    pose.pose.orientation.w = q_finale.w();
+    pose.header.frame_id = FRAME_ID;
+
+    plan_execute_cartesian(move_group, pose, LOGGER);
+
+    pose.pose.position.z -=0.1;
+    plan_execute_cartesian(move_group, pose, LOGGER);
+
+    gripper_group.setNamedTarget("open");
+    gripper_group.move(); 
+
+
+    pose.pose.position.z +=0.1;
     plan_execute_cartesian(move_group, pose, LOGGER);
     
 
