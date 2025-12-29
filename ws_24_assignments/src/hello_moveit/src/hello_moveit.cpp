@@ -118,6 +118,42 @@ void plan_execute(
     }
 }
 
+void plan_execute_cartesian(
+        moveit::planning_interface::MoveGroupInterface& group, 
+        const geometry_msgs::msg::PoseStamped& target,
+        const rclcpp::Logger& LOGGER
+    ) {
+    // Compute the cartesian path.
+    geometry_msgs::msg::Pose start_pose = group.getCurrentPose().pose;
+
+    // Define Waypoints.
+    std::vector<geometry_msgs::msg::Pose> waypoints;
+    waypoints.push_back(start_pose);
+
+    waypoints.push_back(target.pose);
+
+    // Define trajectory parameters.
+    moveit_msgs::msg::RobotTrajectory trajectory;
+    const double jump_threshold = 0.0; // 0.0 disables the jump check (safe for simple paths)
+    const double eef_step = 0.01;      // Resolution of the path (1 cm steps)
+
+    // Compute the trajectory.
+    double fraction = group.computeCartesianPath(
+            waypoints,
+            eef_step,
+            jump_threshold,
+            trajectory
+    );
+
+    RCLCPP_INFO(LOGGER, "Visualizing plan (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
+
+    // Execute the path.
+    if (fraction >= 0.9) {
+        group.execute(trajectory);
+    } else {
+        RCLCPP_WARN(LOGGER, "Could not compute full path. Aborting.");
+    }
+}
 
 // Main function
 int main(int argc, char * argv[]) {
@@ -246,7 +282,7 @@ int main(int argc, char * argv[]) {
     {"table_1", 0.4, 0.4, 0.35, tag1_pos[0] + 0.025,tag1_pos[1] + 0.025, tag1_pos[2] - 0.1 - (0.35)/2},
     {"tag_1", 0.05, 0.05, 0.1, tag1_pos[0] + 0.025, tag1_pos[1] - 0.025, tag1_pos[2] - 0.1 + (0.1)/2},
     {"table_2", 0.4, 0.4, 0.35, tag10_pos[0] + 0.025,tag10_pos[1] + 0.025, tag10_pos[2] - 0.1 - (0.35)/2},
-    {"tag_2", 0.05, 0.05, 0.1, tag10_pos[0] + 0.025, tag10_pos[1] - 0.025, tag10_pos[2] - 0.1 + (0.1)/2}
+    {"tag_2", 0.05, 0.05, 0.1, tag10_pos[0] + 0.025, tag10_pos[1] + 0.01, tag10_pos[2] - 0.1 + (0.1)/2}
     // ID, Width, Depth, Height, OffsetX, OffsetY, OffsetZ
     };
 
@@ -351,7 +387,7 @@ int main(int argc, char * argv[]) {
     move_group.setMaxAccelerationScalingFactor(0.1);
 
     pose.pose.position.z -= 0.08;
-    plan_execute(move_group, my_plan, pose, LOGGER);
+    plan_execute_cartesian(move_group, pose, LOGGER);
     //pose.pose.position.y -= 0.1;
     //move_group.setPoseTarget(pose);
     //plan_execute(move_group, my_plan, pose, LOGGER);
@@ -362,7 +398,7 @@ int main(int argc, char * argv[]) {
 
     // ### STEP 4: Move up ee ###
     pose.pose.position.z += 0.2;
-    plan_execute(move_group, my_plan, pose, LOGGER);
+    plan_execute_cartesian(move_group, pose, LOGGER);
 
     // ## STEP 5: Move towards tag10 ###
     // pos = [0.56, -0.02, 0.68]
@@ -402,59 +438,27 @@ int main(int argc, char * argv[]) {
     pose.pose.orientation.w = q_finale.w();
     pose.header.frame_id = FRAME_ID;
 
-    // Compute the cartesian path.
-    geometry_msgs::msg::Pose start_pose = move_group.getCurrentPose().pose;
-
-    // Define Waypoints.
-    std::vector<geometry_msgs::msg::Pose> waypoints;
-    waypoints.push_back(start_pose);
-
-    // Add the target.
-    geometry_msgs::msg::Pose target_pose1 = pose.pose;
-    waypoints.push_back(target_pose1);
-
-    // Define trajectory parameters.
-    moveit_msgs::msg::RobotTrajectory trajectory;
-    const double jump_threshold = 0.0; // 0.0 disables the jump check (safe for simple paths)
-    const double eef_step = 0.01;      // Resolution of the path (1 cm steps)
-
-    // Compute the trajectory.
-    double fraction = move_group.computeCartesianPath(
-            waypoints,
-            eef_step,
-            jump_threshold,
-            trajectory
-    );
-
-    RCLCPP_INFO(node->get_logger(), "Visualizing plan (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
-
-    // Execute the path.
-    if (fraction >= 0.9) {
-        RCLCPP_INFO(node->get_logger(), "Path valid. Executing...");
-        move_group.execute(trajectory);
-    } else {
-        RCLCPP_WARN(node->get_logger(), "Could not compute full path. Aborting.");
-    }
+    plan_execute_cartesian(move_group, pose, LOGGER);
 
     //plan_execute(move_group, my_plan, pose, LOGGER);
     move_group.clearPathConstraints();
 
     pose.pose.position.z -=0.2;
-    plan_execute(move_group, my_plan, pose, LOGGER);
+    plan_execute_cartesian(move_group, pose, LOGGER);
 
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
     pose.pose.position.z = tag10_pos[2] + 0.04;
-    plan_execute(move_group, my_plan, pose, LOGGER);
+    plan_execute_cartesian(move_group, pose, LOGGER);
 
 
     pose.pose.position.x = tag10_pos[0] - 0.13;
     pose.pose.position.y = tag10_pos[1] + 0.008;
-    plan_execute(move_group, my_plan, pose, LOGGER);
+    plan_execute_cartesian(move_group, pose, LOGGER);
 
     pose.pose.position.z -=0.2;
-    plan_execute(move_group, my_plan, pose, LOGGER);
+    plan_execute_cartesian(move_group, pose, LOGGER);
     
 
 //
