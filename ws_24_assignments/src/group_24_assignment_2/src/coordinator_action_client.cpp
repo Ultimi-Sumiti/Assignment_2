@@ -53,8 +53,7 @@ public:
   {
     // Here we set the initial pose
     current_pose.header.frame_id = "base_link";
-    current_pose.header.stamp = node->now();
-
+    current_pose.header.stamp = this->now();
     // 2. Position: Coordinate in metri rispetto alla base
     current_pose.pose.position.x = 0.45; // 45 cm davanti al robot
     current_pose.pose.position.y = 0.10; // 10 cm a sinistra
@@ -125,10 +124,13 @@ public:
     {
       // Here we print on screen the sequence.
       std::stringstream ss;
-      ss << "Received current battery level of robot: ";
-      auto current_ee_pose = feedback->current_ee_pose;
-      ss << current_ee_pose << ". ";
-      RCLCPP_INFO(this->get_logger(), ss.str().c_str());
+      ss << "Received current pose: ";
+      ss << "Pos: " 
+       << feedback->current_ee_pose.pose.position.x << ", "
+       << feedback->current_ee_pose.pose.position.y << ", "
+       << feedback->current_ee_pose.pose.position.z;
+
+    RCLCPP_INFO(this->get_logger(), ss.str().c_str());
     };
 
     // Here we manage the results.
@@ -153,7 +155,11 @@ public:
 
       std::stringstream ss;
       ss << "Final final pose received received: ";
-      ss <<  result.result->final_ee_pose << ". ";
+      auto final_pos = result.result->final_ee_pose.pose.position;
+      ss << "Pos: (" 
+         << final_pos.x << ", " 
+         << final_pos.y << ", " 
+         << final_pos.z << ")";
 
       // Here we print the results received if the code was succeded.
       RCLCPP_INFO(this->get_logger(), ss.str().c_str());
@@ -171,4 +177,12 @@ private:
 
 }  // namespace custom_action_cpp
 
-RCLCPP_COMPONENTS_REGISTER_NODE(custom_action_cpp::CsActionClient)
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  auto node_options = rclcpp::NodeOptions();
+  auto node = std::make_shared<custom_action_cpp::CsActionClient>(node_options);
+  rclcpp::spin(node);
+  rclcpp::shutdown();
+  return 0;
+}
