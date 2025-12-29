@@ -149,6 +149,9 @@ int main(int argc, char * argv[]) {
     geometry_msgs::msg::PoseStamped p = move_group.getCurrentPose();
     RCLCPP_INFO(LOGGER, "Current Pose frame id: %s", p.header.frame_id.c_str());
 
+    // Set reference frame as base_link.
+    move_group.setPoseReferenceFrame("base_link");
+
 
     // ----- tf_receiver_node ------
     auto tf_receiver_node = std::make_shared<TryNode>(node_options);
@@ -358,6 +361,8 @@ int main(int argc, char * argv[]) {
     pose.pose.position.z += 0.2;
     plan_execute(move_group, my_plan, pose, LOGGER);
 
+    // ## STEP 5: Move towards tag10 ###
+    // pos = [0.56, -0.02, 0.68]
     double initial_wrist_3_val = move_group.getCurrentJointValues()[5];
     moveit_msgs::msg::JointConstraint jc3;
     jc3.joint_name = "wrist_3_joint"; // Assicurati che il nome corrisponda al tuo URDF
@@ -366,23 +371,22 @@ int main(int argc, char * argv[]) {
     jc3.tolerance_below = to_rad(5.0);
     jc3.weight = 1.0;
 
-    // 2. Crea l'oggetto Constraints e aggiungi il vincolo del giunto
+    // Crea l'oggetto Constraints e aggiungi il vincolo del giunto
     moveit_msgs::msg::Constraints path_constraints;
     path_constraints.name = "lock_wrist_3";
     path_constraints.joint_constraints.push_back(jc3);
 
-    // 3. Applica il vincolo al move_group
+    // Applica il vincolo al move_group
     // Questo influenzerà TUTTO il percorso calcolato da plan()
     //move_group.setPathConstraints(path_constraints);
    
     pose.pose.position.x = tag10_pos[0];
     pose.pose.position.y = tag10_pos[1];
-    pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
+    //pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
 
+    // Compute new desired orientation.
     tf2::fromMsg(pose.pose.orientation, q_attuale);
-
-    // define new desired orientation
-    q_rotazione.setRPY(0, 3*M_PI/2, 0 ); // <--- DEVE ESSERE M_PI, non 0
+    q_rotazione.setRPY(0, 3*M_PI/2, 0 );
 
     // compute new orientation by composition of rotations
     q_finale = q_attuale * q_rotazione;
@@ -395,26 +399,42 @@ int main(int argc, char * argv[]) {
     pose.pose.orientation.w = q_finale.w();
     pose.header.frame_id = FRAME_ID;
 
-    plan_execute(move_group, my_plan, pose, LOGGER);
-    move_group.clearPathConstraints();
+    // Compute the cartesian path.
+    geometry_msgs::msg::Pose start_pose = move_group.getCurrentPose().pose;
 
-    // ## STEP 5: Move towards tag10 ###
-    // pos = [0.56, -0.02, 0.68]
-    //pose.pose.position.x = 0.56;
-    //pose.pose.position.y = -0.02;
-    //pose.pose.position.z = 0.68
+    // Define Waypoints.
+    std::vector<geometry_msgs::msg::Pose> waypoints;
+    waypoints.push_back(start_pose);
 
-    //q_rotazione.setRPY(0, M_PI/2, 0 ); // <--- DEVE ESSERE M_PI, non 0
-    //q_finale = q_attuale * q_rotazione;
-    //q_finale.normalize();
+    // Add the target.
+    geometry_msgs::msg::Pose target_pose1 = pose.pose;
+    waypoints.push_back(target_pose1);
 
-    //// set final desired values
-    //pose.pose.orientation.x = q_finale.x();
-    //pose.pose.orientation.y = q_finale.y();
-    //pose.pose.orientation.z = q_finale.z();
-    //pose.pose.orientation.w = q_finale.w();
-    //pose.header.frame_id = FRAME_ID;
+    // Define trajectory parameters.
+    moveit_msgs::msg::RobotTrajectory trajectory;
+    const double jump_threshold = 0.0; // 0.0 disables the jump check (safe for simple paths)
+    const double eef_step = 0.01;      // Resolution of the path (1 cm steps)
+
+    // Compute the trajectory.
+    double fraction = move_group.computeCartesianPath(
+            waypoints,
+            eef_step,
+            jump_threshold,
+            trajectory
+    );
+
+    RCLCPP_INFO(node->get_logger(), "Visualizing plan (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
+
+    // Execute the path.
+    if (fraction >= 0.9) {
+        RCLCPP_INFO(node->get_logger(), "Path valid. Executing...");
+        move_group.execute(trajectory);
+    } else {
+        RCLCPP_WARN(node->get_logger(), "Could not compute full path. Aborting.");
+    }
+
     //plan_execute(move_group, my_plan, pose, LOGGER);
+    move_group.clearPathConstraints();
 
 //
 //    ///////////////////////////////////////////////////////////
