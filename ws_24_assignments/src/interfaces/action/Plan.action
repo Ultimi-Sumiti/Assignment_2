@@ -1,0 +1,9 @@
+# Goal Service Request  
+geometry_msgs/PoseStamped target_ee_pose
+std_msgs/String move_type
+---
+# Result Service Response
+geometry_msgs/PoseStamped final_ee_pose
+---
+# Feedback topic
+geometry_msgs/PoseStamped current_ee_pose
