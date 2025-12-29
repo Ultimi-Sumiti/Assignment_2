@@ -57,7 +57,7 @@ class TryNode : public rclcpp::Node
                 base_frame_, tag1_frame_, tf2::TimePointZero, std::chrono::milliseconds(100)); // Timeout breve per non bloccare
             
             T_tag10_base = this->tf_buffer_->lookupTransform(
-                base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
+               base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
 
             // Salviamo i risultati nei vettori passati dal main
             tag1_xyz[0] = T_tag1_base.transform.translation.x;
@@ -159,7 +159,7 @@ void plan_execute_cartesian(
 int main(int argc, char * argv[]) {
     rclcpp::init(argc, argv);
 
-    // ----- Moveit node ------
+    // ### INIT STUFF ###
     rclcpp::NodeOptions node_options;
     node_options.automatically_declare_parameters_from_overrides(true);
     auto node = rclcpp::Node::make_shared("hello_moveit_planner", node_options);
@@ -189,16 +189,15 @@ int main(int argc, char * argv[]) {
     move_group.setPoseReferenceFrame("base_link");
 
 
-    // ----- tf_receiver_node ------
+    // ### GET APRIL-TAGS POSITION ###
     auto tf_receiver_node = std::make_shared<TryNode>(node_options);
     // Spin TF node in a separate thread
     std::thread([&tf_receiver_node]() { rclcpp::spin(tf_receiver_node); }).detach();
 
     std::this_thread::sleep_for(std::chrono::seconds(2)); // Allow moveit to initialize
-    
 
     std::vector<double> tag1_pos(3, 0.0);
-    std::vector<double> tag10_pos(3, 0.0);
+    std::vector<double> tag10_pos{0.57, -0.01, 0.44};
     
     RCLCPP_INFO(LOGGER, "Waiting for AprilTags transforms...");
     bool tags_found = false;
@@ -222,60 +221,7 @@ int main(int argc, char * argv[]) {
     }
 
 
-    ///////////////////////////////////////////////////////////
-    /////////////////// move in joint space ///////////////////
-    ///////////////////////////////////////////////////////////
-  //  std::vector<double> joint_values = {
-  //      to_rad(-246),
-  //      to_rad(-73),
-  //      to_rad(-109),
-  //      to_rad(-177),
-  //      to_rad(-66),
-  //      to_rad(-1)
-  //  }; // degree to radians using the function defined above
-
-  //  move_group.setJointValueTarget(joint_values);
-
-  //  if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
-  //      RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
-  //      move_group.execute(my_plan);
-  //  } else {
-  //      RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
-  //  }//    pose.pose.position.x = tag1_pos[0];
-//    pose.pose.position.y = tag1_pos[1];
-//    p
-    
-//    ///////////////////////////////////////////////////////////
-//    ////// move in cartesian space with path constraints //////
-//    ///////////////////////////////////////////////////////////
-//    geometry_msgs::msg::PoseStamped vertical_pose = move_group.getCurrentPose();
-//
-//    // set path constraints
-//    moveit_msgs::msg::OrientationConstraint ocm;
-//    ocm.link_name = "tool0";
-//    ocm.header.frame_id = FRAME_ID;
-//    ocm.orientation = vertical_pose.pose.orientation;
-//    ocm.absolute_x_axis_tolerance = 0.1;
-//    ocm.absolute_y_axis_tolerance = 0.1;
-//    ocm.absolute_z_axis_tolerance = 3.14; // effectively no constraint on z axis
-//    ocm.weight = 1.0;
-//
-//    moveit_msgs::msg::Constraints constraints;
-//    constraints.orientation_constraints.push_back(ocm);
-//    move_group.setPathConstraints(constraints);
-//
-//    geometry_msgs::msg::PoseStamped target_pose = vertical_pose;
-//    target_pose.header.frame_id = FRAME_ID; // ensure correct frame
-//    target_pose.pose.position.x = +0.2;
-//    // target_pose.pose.position.y -= 0.2;
-//    target_pose.pose.position.z -= 0.2;
-//    move_group.setPoseTarget(target_pose);
-//
-//    move_group.setPlanningTime(20.0);                    // set planning time
-//
-//    if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
-
-
+    // ### ADD GREEN BLOCKS (constraints) ###
     geometry_msgs::msg::PoseStamped pose = move_group.getCurrentPose();
     
     std::vector<BoxConfig> boxes_to_add = {
@@ -320,7 +266,6 @@ int main(int argc, char * argv[]) {
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     planning_scene_interface.addCollisionObjects(collision_objects);
 
-
     moveit::core::RobotStatePtr current_state = move_group.getCurrentState();
 
     // 2. Definisci il valore per il 4° giunto (wrist_1_joint)
@@ -334,15 +279,15 @@ int main(int argc, char * argv[]) {
     // Questo dice al solutore IK: "Cerca di stare il più vicino possibile a questa configurazione"
     move_group.setJointValueTarget(*current_state);
 
-    ///////////////////////////////////////////////////////////
-    ///////////////// move in cartesian space /////////////////
-    ///////////////////////////////////////////////////////////
 
-    // ### Step 1: Open grip ###
+    /*
+     * ENTIRE PIPELINE
+     */
+
+    // ### Step 1: Open grip and approach tag1 (red) ###
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
-    // ### STEP 2: Approach tag1 ###
     // get current end-effector pose in cartesian space
     // set new pose based on position of tag1
     pose.pose.position.x = tag1_pos[0] + 0.03;
@@ -382,43 +327,22 @@ int main(int argc, char * argv[]) {
                     current_joint_values[i] * 180.0 / M_PI);
     }
 
+    // ### STEP 2: Grab tag1, and lift up ###
     // Limit speed.
     move_group.setMaxVelocityScalingFactor(0.1);
     move_group.setMaxAccelerationScalingFactor(0.1);
 
     pose.pose.position.z -= 0.08;
     plan_execute_cartesian(move_group, pose, LOGGER);
-    //pose.pose.position.y -= 0.1;
-    //move_group.setPoseTarget(pose);
-    //plan_execute(move_group, my_plan, pose, LOGGER);
 
-    // ### STEP 3: Close gripper a little bit to grab tag1 ###
     gripper_group.setJointValueTarget("robotiq_85_left_knuckle_joint", to_rad(5));
     gripper_group.move(); 
 
-    // ### STEP 4: Move up ee ###
+    // ### STEP 3: Move up ee and move towards drop position ###
     pose.pose.position.z += 0.2;
     plan_execute_cartesian(move_group, pose, LOGGER);
 
-    // ## STEP 5: Move towards tag10 ###
-    // pos = [0.56, -0.02, 0.68]
-    double initial_wrist_3_val = move_group.getCurrentJointValues()[5];
-    moveit_msgs::msg::JointConstraint jc3;
-    jc3.joint_name = "wrist_3_joint"; // Assicurati che il nome corrisponda al tuo URDF
-    jc3.position = to_rad(initial_wrist_3_val);
-    jc3.tolerance_above = to_rad(5.0); // Tolleranza stretta per tenerlo "fisso"
-    jc3.tolerance_below = to_rad(5.0);
-    jc3.weight = 1.0;
-
-    // Crea l'oggetto Constraints e aggiungi il vincolo del giunto
-    moveit_msgs::msg::Constraints path_constraints;
-    path_constraints.name = "lock_wrist_3";
-    path_constraints.joint_constraints.push_back(jc3);
-
-    // Applica il vincolo al move_group
-    // Questo influenzerà TUTTO il percorso calcolato da plan()
-    //move_group.setPathConstraints(path_constraints);
-   
+    // pos = [0.56, -0.02, 0.68] TO REMOVE (for luca)
     pose.pose.position.x = tag10_pos[0] - 0.25;
     pose.pose.position.y = tag10_pos[1] + 0.12;
     //pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
@@ -440,9 +364,7 @@ int main(int argc, char * argv[]) {
 
     plan_execute_cartesian(move_group, pose, LOGGER);
 
-    //plan_execute(move_group, my_plan, pose, LOGGER);
-    move_group.clearPathConstraints();
-
+    // ### STEP 4: drop tag1, open grip and lift up ###
     pose.pose.position.z -=0.2;
     plan_execute_cartesian(move_group, pose, LOGGER);
 
@@ -452,7 +374,8 @@ int main(int argc, char * argv[]) {
     pose.pose.position.z = tag10_pos[2] + 0.04;
     plan_execute_cartesian(move_group, pose, LOGGER);
 
-
+    
+    // ### STEP 5: move towards tag10 (blue) and grab it ###
     pose.pose.position.x = tag10_pos[0] - 0.13;
     pose.pose.position.y = tag10_pos[1] + 0.008;
     plan_execute_cartesian(move_group, pose, LOGGER);
@@ -463,6 +386,7 @@ int main(int argc, char * argv[]) {
     gripper_group.setJointValueTarget("robotiq_85_left_knuckle_joint", to_rad(5));
     gripper_group.move(); 
 
+    // ## STEP 6: lift up tag10 and move towards drop point ###
     pose.pose.position.z +=0.1;
     plan_execute_cartesian(move_group, pose, LOGGER);
 
@@ -486,38 +410,17 @@ int main(int argc, char * argv[]) {
 
     plan_execute_cartesian(move_group, pose, LOGGER);
 
+    // STEP 7: drop tag10 ###
     pose.pose.position.z -=0.1;
     plan_execute_cartesian(move_group, pose, LOGGER);
 
     gripper_group.setNamedTarget("open");
     gripper_group.move(); 
 
-
     pose.pose.position.z +=0.1;
     plan_execute_cartesian(move_group, pose, LOGGER);
     
-
-//
-//    ///////////////////////////////////////////////////////////
-//    ////////////// introduce a collision object ///////////////
-//    ///////////////////////////////////////////////////////////
- 
-//
-//    ///////////////////////////////////////////////////////////
-//    /////// move in cartesian space avoiding collision ////////
-//    ///////////////////////////////////////////////////////////
-//    // modifiy the target pose and move again
-//    pose.pose.position.x = -0.3;
-//
-//    move_group.setPoseTarget(pose);
-//
-//    if (move_group.plan(my_plan) == moveit::core::MoveItErrorCode::SUCCESS) {
-//        RCLCPP_INFO(LOGGER, "Planning to current pose SUCCESSFUL. Executing...");
-//        move_group.execute(my_plan);
-//    } else {
-//        RCLCPP_ERROR(LOGGER, "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
-//    }
-//
+    // ### STEP 8: (TODO) go back to starting position ###
 
     RCLCPP_INFO(LOGGER, "Process finished. Shutting down.");
     rclcpp::shutdown();
