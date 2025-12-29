@@ -346,6 +346,9 @@ int main(int argc, char * argv[]) {
                     current_joint_values[i] * 180.0 / M_PI);
     }
 
+    // Limit speed.
+    move_group.setMaxVelocityScalingFactor(0.1);
+    move_group.setMaxAccelerationScalingFactor(0.1);
 
     pose.pose.position.z -= 0.08;
     plan_execute(move_group, my_plan, pose, LOGGER);
