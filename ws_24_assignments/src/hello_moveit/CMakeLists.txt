@@ -9,6 +9,10 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 add_executable(hello_moveit src/hello_moveit.cpp)
 target_include_directories(hello_moveit PUBLIC
@@ -19,6 +23,10 @@ ament_target_dependencies(
   hello_moveit
   "moveit_ros_planning_interface"
   "rclcpp"
+  "moveit_core"
+  "geometry_msgs"
+  "tf2_geometry_msgs"
+  "tf2_ros"
 )
 
 install(TARGETS

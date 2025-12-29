@@ -383,8 +383,8 @@ int main(int argc, char * argv[]) {
     // Questo influenzerà TUTTO il percorso calcolato da plan()
     //move_group.setPathConstraints(path_constraints);
    
-    pose.pose.position.x = tag10_pos[0];
-    pose.pose.position.y = tag10_pos[1];
+    pose.pose.position.x = tag10_pos[0] - 0.25;
+    pose.pose.position.y = tag10_pos[1] + 0.12;
     //pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
 
     // Compute new desired orientation.
@@ -438,6 +438,24 @@ int main(int argc, char * argv[]) {
 
     //plan_execute(move_group, my_plan, pose, LOGGER);
     move_group.clearPathConstraints();
+
+    pose.pose.position.z -=0.2;
+    plan_execute(move_group, my_plan, pose, LOGGER);
+
+    gripper_group.setNamedTarget("open");
+    gripper_group.move(); 
+
+    pose.pose.position.z = tag10_pos[2] + 0.04;
+    plan_execute(move_group, my_plan, pose, LOGGER);
+
+
+    pose.pose.position.x = tag10_pos[0] - 0.13;
+    pose.pose.position.y = tag10_pos[1] + 0.008;
+    plan_execute(move_group, my_plan, pose, LOGGER);
+
+    pose.pose.position.z -=0.2;
+    plan_execute(move_group, my_plan, pose, LOGGER);
+    
 
 //
 //    ///////////////////////////////////////////////////////////
