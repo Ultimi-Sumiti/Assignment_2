@@ -10,7 +10,23 @@ find_package(ament_cmake REQUIRED)
 find_package(interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(moveit_ros_planning_interface REQUIRED)
+find_package(std_msgs REQUIRED)
 
+add_executable(gripper src/gripper.cpp)
+
+ament_target_dependencies(gripper
+    moveit_ros_planning_interface
+    rclcpp
+    moveit_core
+    std_msgs
+    )
+
+install(TARGETS
+    gripper
+    DESTINATION lib/${PROJECT_NAME}
+    )
 
 #find_package(rclcpp_components REQUIRED)
 
@@ -21,6 +37,9 @@ find_package(rclcpp_action REQUIRED)
 #  rclcpp
 #)
 
-
+install(DIRECTORY
+    launch
+    DESTINATION share/${PROJECT_NAME}/
+    )
 
 ament_package()
