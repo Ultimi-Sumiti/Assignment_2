@@ -72,6 +72,7 @@ ament_target_dependencies(coordinator_action_client
     moveit_ros_planning_interface
 )
 
+target_link_libraries(coordinator_action_client group_24_assignment_2)
 
 add_executable(gripper src/gripper.cpp)
 ament_target_dependencies(gripper

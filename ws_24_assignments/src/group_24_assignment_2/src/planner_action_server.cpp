@@ -93,7 +93,7 @@ private:
 
         // Planner settings.
         planner_group_->setNumPlanningAttempts(10);
-        planner_group_->setPlanningTime(5.0);
+        planner_group_->setPlanningTime(10.0);
 
         RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
     }

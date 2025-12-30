@@ -28,10 +28,6 @@
 
 using namespace std::chrono_literals;
 
-
-// 1. Definisci la funzione di conversione
-auto to_rad = [](double deg) { return deg * M_PI / 180.0; };
-
 struct BoxConfig {
     std::string id;
     double width, depth, height;
