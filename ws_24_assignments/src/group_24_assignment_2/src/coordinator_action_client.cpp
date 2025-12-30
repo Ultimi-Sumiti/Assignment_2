@@ -43,6 +43,11 @@ static const std::string GRIPPER_GROUP = "ir_gripper";
 
 namespace custom_action_cpp
 {
+
+
+
+// 1. Definisci la funzione di conversione
+auto to_rad = [](double deg) { return deg * M_PI / 180.0; };
 // Define the action client node.
 class CsActionClient : public rclcpp::Node
 {
@@ -65,15 +70,15 @@ public:
     current_pose.header.frame_id = "base_link";
     current_pose.header.stamp = this->now();
     // 2. Position: Coordinate in metri rispetto alla base
-    current_pose.pose.position.x = 0.0; 
-    current_pose.pose.position.y = 0.0; 
-    current_pose.pose.position.z = 0.0;
+    current_pose.pose.position.x = 0.4; 
+    current_pose.pose.position.y = 0.1; 
+    current_pose.pose.position.z = 0.5;
 
     // 3. Orientation: Quaternione 
     current_pose.pose.orientation.x = 0.0;
     current_pose.pose.orientation.y = 0.0;
     current_pose.pose.orientation.z = 0.0;
-    current_pose.pose.orientation.w = 0.0;
+    current_pose.pose.orientation.w = 1.0;
 
 
     boxes_to_add = {
@@ -90,7 +95,7 @@ public:
     // This command call all the user callback.
     this->client_ptr_ = rclcpp_action::create_client<Plan>(
       this,
-      "Plan");
+      "plan");
 
     // Here we define the timer callback, which send the goal at intervals.
     auto timer_callback_lambda = [this](){ return this->send_goal(); };
@@ -171,6 +176,9 @@ public:
 
     // Here we define the goal.
     auto goal_msg = Plan::Goal();
+    
+    get_tag_position();
+
     // Here we set the goal message.
 
     // set new pose based on position of tag1.
@@ -199,7 +207,21 @@ public:
     current_pose.pose.orientation.w = q_finale.w();
     current_pose.header.frame_id = FRAME_ID;
 
+    std::cout << "Pos: (x: " 
+       << current_pose.pose.position.x << ", y: "
+       << current_pose.pose.position.y << ", z: "
+       << current_pose.pose.position.z << ", x orientation: "
+       << current_pose.pose.orientation.x << ", y orientation: "
+       << current_pose.pose.orientation.y << ", z orientation: "
+       << current_pose.pose.orientation.z << ", w orientation: "
+       << current_pose.pose.orientation.w <<") "<< std::endl;
+
+
     goal_msg.target_ee_pose = current_pose;
+    auto message = std_msgs::msg::String();
+    message.data = "free_cartesian";
+    goal_msg.move_type = message;
+
 
     // Here we sent the goal to server.
     RCLCPP_INFO(this->get_logger(), "Sending goal");
