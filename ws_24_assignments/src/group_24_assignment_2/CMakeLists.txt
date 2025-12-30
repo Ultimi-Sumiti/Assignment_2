@@ -23,6 +23,29 @@ find_package(tf2_ros REQUIRED)
 #    geometry_msgs
 #)
 
+
+include_directories(include)
+
+add_library(group_24_assignment_2
+    include/utils.h
+    src/utils.cpp
+)
+
+ament_target_dependencies(group_24_assignment_2
+    rclcpp 
+    interfaces
+    rclcpp_action 
+    rclcpp_components
+    std_msgs
+    geometry_msgs
+    tf2_ros
+    tf2_geometry_msgs
+    moveit_core
+    moveit_ros_planning_interface
+)
+
+
+
 add_executable(planner_action_server src/planner_action_server.cpp)
 ament_target_dependencies(planner_action_server 
     rclcpp 
