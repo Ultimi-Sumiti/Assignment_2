@@ -75,10 +75,10 @@ public:
     current_pose.pose.position.z = 0.5;
 
     // 3. Orientation: Quaternione 
-    current_pose.pose.orientation.x = 0.0;
-    current_pose.pose.orientation.y = 0.0;
-    current_pose.pose.orientation.z = 0.0;
-    current_pose.pose.orientation.w = 1.0;
+    current_pose.pose.orientation.x = -0.707105;
+    current_pose.pose.orientation.y = -0.000218838;
+    current_pose.pose.orientation.z = 0.0012875;
+    current_pose.pose.orientation.w = 0.707107;
 
 
     boxes_to_add = {
@@ -207,7 +207,7 @@ public:
     current_pose.pose.orientation.w = q_finale.w();
     current_pose.header.frame_id = FRAME_ID;
 
-    std::cout << "Pos: (x: " 
+    std::cout << "initial: (x: " 
        << current_pose.pose.position.x << ", y: "
        << current_pose.pose.position.y << ", z: "
        << current_pose.pose.position.z << ", x orientation: "
