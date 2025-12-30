@@ -31,6 +31,8 @@ ament_target_dependencies(planner_action_server
     rclcpp_components
     std_msgs
     geometry_msgs
+    moveit_ros_planning_interface
+    moveit_core
 )
 
 add_executable(coordinator_action_client src/coordinator_action_client.cpp)

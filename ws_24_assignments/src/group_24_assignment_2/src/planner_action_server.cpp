@@ -1,13 +1,16 @@
 #include <functional>
 #include <memory>
 #include <thread>
+#include <chrono>
 
 #include "interfaces/action/plan.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rclcpp_components/register_node_macro.hpp" // We are dealing with components and not only simple nodes!
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <moveit/move_group_interface/move_group_interface.hpp>
 
-//#include "custom_action_cpp/visibility_control.h"
+using namespace std::chrono_literals;
 
 namespace plan_action
 {
@@ -66,6 +69,15 @@ public:
       handle_goal, // A callback function for handling goals
       handle_cancel,// A callback function for handling cancellation
       handle_accepted); // A callback function for handling goal accept
+
+
+    // Init to call the initialization of the moveit group of the ir_planner 
+    timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(1), 
+            std::bind(&PlannerActionServer::init_moveit, this)
+        );
+
+
   }
 
 
@@ -73,10 +85,79 @@ public:
 private:
 // ----- DATA MEMEBERS -----
   rclcpp_action::Server<Plan>::SharedPtr action_server_;
-
+  std::shared_ptr<moveit::planning_interface::MoveGroupInterface> planner_group_;
+  moveit::planning_interface::MoveGroupInterface::Plan plan_;
+  rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr timer_feedback_;
 
 // ----- MEMBER FUNCTIONS -----
+void plan_execute(
+        const geometry_msgs::msg::PoseStamped& pose    
+    ) {
+    // Set target pose.
+    planner_group_->setPoseTarget(pose);
+    
+    // Try to define a plan: max 10 attempts.
+    int attempt_count = 1;
+    auto res = planner_group_->plan(this->plan_);
+    while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
+        res = planner_group_->plan(this->plan_);
+        std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
+        attempt_count++;
+    } 
 
+    // Try to execute the defined plan.
+    if (res == moveit::core::MoveItErrorCode::SUCCESS) {
+        RCLCPP_INFO(this->get_logger(), "Planning to current pose SUCCESSFUL. Executing...");
+        planner_group_->execute(plan_);
+    } else {
+        RCLCPP_ERROR(this->get_logger(), "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
+    }
+}
+
+void plan_execute_cartesian( 
+        const geometry_msgs::msg::PoseStamped& target
+    ) {
+    // Compute the cartesian path.
+    geometry_msgs::msg::Pose start_pose = this->planner_group_->getCurrentPose().pose;
+
+    // Define Waypoints.
+    std::vector<geometry_msgs::msg::Pose> waypoints;
+    waypoints.push_back(start_pose);
+
+    waypoints.push_back(target.pose);
+
+    // Define trajectory parameters.
+    moveit_msgs::msg::RobotTrajectory trajectory;
+    const double jump_threshold = 0.0; // 0.0 disables the jump check (safe for simple paths)
+    const double eef_step = 0.01;      // Resolution of the path (1 cm steps)
+
+    // Compute the trajectory.
+    double fraction = this->planner_group_->computeCartesianPath(
+            waypoints,
+            eef_step,
+            jump_threshold,
+            trajectory
+    );
+
+    RCLCPP_INFO(this->get_logger(), "Visualizing plan (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
+
+    // Execute the path.
+    if (fraction >= 0.9) {
+        this->planner_group_->execute(trajectory);
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Could not compute full path. Aborting.");
+    }
+}
+
+   void init_moveit() {
+        timer_->cancel();
+        auto node_ptr = this->shared_from_this();
+        planner_group_= std::make_shared<moveit::planning_interface::MoveGroupInterface>(node_ptr, "ir_arm");
+        RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
+    }
+
+  
 /* 
  Remmeber how is build the .action file: 
  Goal - Request - Feedback
@@ -84,20 +165,58 @@ private:
   // Function that process the goal required by the Client and response to it
   void execute(const std::shared_ptr<GoalHandlePlan> goal_handle) {
     
+      
+
     RCLCPP_INFO(this->get_logger(), "Executing goal");
 
-    rclcpp::Rate loop_rate(1); // 1 Hz freqenzy
+
+
+    //rclcpp::Rate loop_rate(1); // 1 Hz freqenzy
 
     // Recover goal send by the Client
     const auto goal = goal_handle->get_goal(); 
+    geometry_msgs::msg::PoseStamped target_ee_pose = goal->target_ee_pose;
+    std::string move_type = goal->move_type.data;
 
-//    // Inizialization of the Feedback and Result as shared pointer
+    // Inizialization of the Feedback and Result as shared pointer
     auto feedback = std::make_shared<Plan::Feedback>(); // Feedback
-    auto & curr_pose = feedback->current_ee_pose; // Creare an Alias 
-//    sequence.push_back(0);
-//    sequence.push_back(1);
-//    
+    
+    // Start to send feedback
+    auto send_feedback = [this, goal_handle, feedback]()
+    {
+    
+      feedback->current_ee_pose = planner_group_->getCurrentPose();
+      goal_handle->publish_feedback(feedback);
+      RCLCPP_INFO(this->get_logger(), "Publish feedback");
+
+    };
+    timer_feedback_ = this->create_wall_timer(1000ms, send_feedback);
+
+    // result
     auto result = std::make_shared<Plan::Result>(); // Result
+
+    if (move_type == "path_cartesian")
+    {
+
+      plan_execute_cartesian(target_ee_pose);
+    }
+    else if (move_type == "free_cartesian")
+    {
+      plan_execute(target_ee_pose);
+    }
+
+    // Check if goal is done
+    if (rclcpp::ok()) { // Check if the node is still operative
+      // notice this line, at left sequence is the field of result described in .action, at right sequence 
+      // is the alias to the field partial_sequence of feedback. Indeed at the end the partial sequence correspond with the complete one
+      result->final_ee_pose = feedback->current_ee_pose; 
+      goal_handle->succeed(result); // Set goal SUCCEEDED and sent result to Client
+      RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+    }
+  };
+
+};  // class PlanActionServer
+
 
 //    // Loop that iterates with 1 Hz frequency
 //    for (int i = 1; (i < goal->order) && rclcpp::ok(); ++i) {
@@ -119,19 +238,10 @@ private:
 //      loop_rate.sleep(); // sleep in order to mantain 1 Hz frequency
 //    }
 //
-//    // Check if goal is done
-//    if (rclcpp::ok()) { // Check if the node is still operative
-//      // notice this line, at left sequence is the field of result described in .action, at right sequence 
-//      // is the alias to the field partial_sequence of feedback. Indeed at the end the partial sequence correspond with the complete one
-//      result->final_ee_pose = curr_pose; 
-//      goal_handle->succeed(result); // Set goal SUCCEEDED and sent result to Client
-//      RCLCPP_INFO(this->get_logger(), "Goal succeeded");
-//    }
-  };
 
-};  // class PlanActionServer
 
-}  // namespace custom_action_cpp
+
+}  
 
 // This macro is used when we deal with not simple nodes but for example with actions
 // and allow this client to work 
@@ -158,30 +268,3 @@ int main(int argc, char ** argv)
 
 
 
-
-
-
-
-
-
-
-
-
-/*
-L'ultima riga del tuo file, al di fuori della classe e del namespace, è la chiave per far funzionare questo nodo come Componente ROS 2.
-
-Ruolo e Importanza
-
-- Registrazione (Registration): Questa macro inietta del codice C++ (spesso un boilerplate) che crea la funzione 
-  di esportazione dinamica richiesta dal framework dei componenti ROS 2.
-
-- Caricamento Dinamico: Quando avvii il component_container (o launch file che lo usa), il container cerca
-  le librerie (.so su Linux) nel pacchetto e usa questa funzione registrata per sapere come creare un'istanza 
-  della classe FibonacciActionServer all'interno del suo processo.
-
-- Action Component: Poiché hai strutturato il tuo Action Server per accettare rclcpp::NodeOptions nel costruttore,
-  questa macro lo registra come un nodo pronto per essere caricato dinamicamente, rendendolo un vero Action Component.
-
-In sintesi, questa riga è il "timbro" che dice a ROS 2: "Questa libreria contiene un nodo chiamato
-FibonacciActionServer e questo è il modo per avviarlo in un container!"
-*/
