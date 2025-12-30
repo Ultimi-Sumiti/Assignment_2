@@ -93,7 +93,7 @@ private:
 
         // Planner settings.
         planner_group_->setNumPlanningAttempts(10);
-        planner_group_->setPlanningTime(5.0);
+        planner_group_->setPlanningTime(15.0);
 
         RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
     }
@@ -168,6 +168,17 @@ private:
         const auto goal = goal_handle->get_goal(); 
         geometry_msgs::msg::PoseStamped target_ee_pose = goal->target_ee_pose;
         std::string move_type = goal->move_type.data;
+
+        std::cout << "TARGET POSE" << std::endl
+            << "x:" << target_ee_pose.pose.position.x << std::endl
+            << "y:" << target_ee_pose.pose.position.y << std::endl
+            << "z:" << target_ee_pose.pose.position.z << std::endl
+
+            << "x:" << target_ee_pose.pose.orientation.x << std::endl
+            << "y:" << target_ee_pose.pose.orientation.y << std::endl
+            << "z:" << target_ee_pose.pose.orientation.z << std::endl
+            << "w:" << target_ee_pose.pose.orientation.w << std::endl;
+
 
         // Inizialization of the Feedback and Result as shared pointer
         auto feedback = std::make_shared<Plan::Feedback>(); // Feedback
