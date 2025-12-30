@@ -85,25 +85,45 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::CallbackGroup::SharedPtr cb_group_;
 
+    void init_moveit() {
+        timer_->cancel(); // Just init one time.
+
+        auto node_ptr = this->shared_from_this();
+        planner_group_= std::make_shared<moveit::planning_interface::MoveGroupInterface>(node_ptr, "ir_arm");
+
+        // Planner settings.
+        planner_group_->setNumPlanningAttempts(10);
+        planner_group_->setPlanningTime(5.0);
+
+        RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
+    }
+
     void plan_execute(const geometry_msgs::msg::PoseStamped& pose) {
         // Set target pose.
         planner_group_->setPoseTarget(pose);
 
+        // TO REMOVE!
         // Try to define a plan: max 10 attempts.
-        int attempt_count = 1;
-        auto res = planner_group_->plan(this->plan_);
-        while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
-            res = planner_group_->plan(this->plan_);
-            std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
-            attempt_count++;
-        } 
+        //int attempt_count = 1;
+        //auto res = planner_group_->plan(this->plan_);
+        //while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
+        //    res = planner_group_->plan(this->plan_);
+        //    std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
+        //    attempt_count++;
+        //} 
 
-        // Try to execute the defined plan.
+        // Try to create a plan (max attempts is defined in the constructor).
+        moveit::core::MoveItErrorCode res = planner_group_->plan(this->plan_);
+
+        // Excute the defined plan, if exists.
         if (res == moveit::core::MoveItErrorCode::SUCCESS) {
-            RCLCPP_INFO(this->get_logger(), "Planning to current pose SUCCESSFUL. Executing...");
+            RCLCPP_INFO(this->get_logger(), "Planning SUCCESSFUL. Executing...");
             planner_group_->execute(plan_);
         } else {
-            RCLCPP_ERROR(this->get_logger(), "Planning to current pose FAILED (GOAL_STATE_INVALID likely). This confirms your current pose is illegal in the planning scene.");
+            RCLCPP_ERROR(this->get_logger(), 
+                "Planning to current pose FAILED (GOAL_STATE_INVALID likely)."
+                "This confirms your current pose is illegal in the planning scene."
+            );
         }
     }
 
@@ -139,13 +159,6 @@ private:
         } else {
             RCLCPP_WARN(this->get_logger(), "Could not compute full path. Aborting.");
         }
-    }
-
-    void init_moveit() {
-        timer_->cancel();
-        auto node_ptr = this->shared_from_this();
-        planner_group_= std::make_shared<moveit::planning_interface::MoveGroupInterface>(node_ptr, "ir_arm");
-        RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
     }
 
     // Function that process the goal required by the Client and response to it
