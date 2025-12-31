@@ -20,6 +20,8 @@ public:
 
     using Plan = interfaces::action::Plan;
     using GoalHandlePlan = rclcpp_action::ServerGoalHandle<Plan>;
+    using MoveGroupInterface = moveit::planning_interface::MoveGroupInterface;
+    using MoveItErrorCode = moveit::core::MoveItErrorCode;
 
     explicit PlannerActionServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
         : Node("plan_action_server", options)
@@ -31,10 +33,9 @@ public:
 
         // Function to handle goals (accepts all of them).
         auto handle_goal = 
-            [this](
-                    const rclcpp_action::GoalUUID & uuid, 
-                    std::shared_ptr<const Plan::Goal> goal
-            ){ 
+            [this]( const rclcpp_action::GoalUUID & uuid, 
+                    std::shared_ptr<const Plan::Goal> goal)
+            { 
                 RCLCPP_INFO(this->get_logger(), "Received target pose goal.");
                 (void) uuid; // Unused.
                 (void) goal; // Unused.
@@ -80,49 +81,56 @@ public:
 private:
 
     rclcpp_action::Server<Plan>::SharedPtr action_server_;
-    std::shared_ptr<moveit::planning_interface::MoveGroupInterface> planner_group_;
-    moveit::planning_interface::MoveGroupInterface::Plan plan_;
+    std::shared_ptr<MoveGroupInterface> planner_group_;
+    MoveGroupInterface::Plan plan_;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::CallbackGroup::SharedPtr cb_group_;
 
-    void init_moveit() {
+    void init_moveit()
+    {
         timer_->cancel(); // Just init one time.
 
         auto node_ptr = this->shared_from_this();
-        planner_group_= std::make_shared<moveit::planning_interface::MoveGroupInterface>(node_ptr, "ir_arm");
+        planner_group_= std::make_shared<MoveGroupInterface>(node_ptr, "ir_arm");
 
         // Planner settings.
-        planner_group_->setNumPlanningAttempts(10);
-        planner_group_->setPlanningTime(15.0);
+        planner_group_->setNumPlanningAttempts(5);
+        planner_group_->setPlanningTime(10);
+        planner_group_->setPoseReferenceFrame("base_link");
 
         RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
     }
 
-    void plan_execute(const geometry_msgs::msg::PoseStamped& pose) {
+    void plan_execute(const geometry_msgs::msg::PoseStamped& pose)
+    {
         // Set target pose.
         planner_group_->setPoseTarget(pose);
 
-        // TO REMOVE!
         // Try to define a plan: max 10 attempts.
-        //int attempt_count = 1;
-        //auto res = planner_group_->plan(this->plan_);
-        //while (res != moveit::core::MoveItErrorCode::SUCCESS && attempt_count < 11) {
-        //    res = planner_group_->plan(this->plan_);
-        //    std::cout<<"Attempt number "<<attempt_count<<std::endl<<std::endl;
-        //    attempt_count++;
-        //} 
+        int cnt = 1;
+        MoveItErrorCode res = planner_group_->plan(this->plan_);
+        while (res != MoveItErrorCode::SUCCESS && cnt < 11)
+        {
+            cnt++;
+            RCLCPP_INFO(this->get_logger(), 
+                    "Planning Failed... Attempt number [%d]", cnt
+            );
+            res = planner_group_->plan(this->plan_);
+        } 
 
+        // TO REMOVE
         // Try to create a plan (max attempts is defined in the constructor).
-        moveit::core::MoveItErrorCode res = planner_group_->plan(this->plan_);
+        //MoveItErrorCode res = planner_group_->plan(this->plan_);
 
-        // Excute the defined plan, if exists.
-        if (res == moveit::core::MoveItErrorCode::SUCCESS) {
-            RCLCPP_INFO(this->get_logger(), "Planning SUCCESSFUL. Executing...");
+        // Excute the defined plan, if was successful.
+        if (res == MoveItErrorCode::SUCCESS) {
+            RCLCPP_INFO(this->get_logger(), 
+                    "Planning SUCCESSFUL. Executing..."
+            );
             planner_group_->execute(plan_);
         } else {
             RCLCPP_ERROR(this->get_logger(), 
                 "Planning to current pose FAILED (GOAL_STATE_INVALID likely)."
-                "This confirms your current pose is illegal in the planning scene."
             );
         }
     }
@@ -132,69 +140,71 @@ private:
         // Compute the cartesian path.
         geometry_msgs::msg::Pose start_pose = this->planner_group_->getCurrentPose().pose;
 
-        // Define Waypoints.
-        std::vector<geometry_msgs::msg::Pose> waypoints;
-        waypoints.push_back(start_pose);
-
-        waypoints.push_back(target.pose);
+        // Define Waypoints: from start pose to target pose.
+        std::vector<geometry_msgs::msg::Pose> waypoints = {start_pose, target.pose};
 
         // Define trajectory parameters.
         moveit_msgs::msg::RobotTrajectory trajectory;
-        const double jump_threshold = 0.0; // 0.0 disables the jump check (safe for simple paths)
-        const double eef_step = 0.01;      // Resolution of the path (1 cm steps)
+        const double ee_step = 0.01; // Resolution of path (1cm)..
 
         // Compute the trajectory.
         double fraction = this->planner_group_->computeCartesianPath(
                 waypoints,
-                eef_step,
-                jump_threshold,
+                ee_step,
                 trajectory
         );
 
-        RCLCPP_INFO(this->get_logger(), "Visualizing plan (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
+        RCLCPP_INFO(this->get_logger(), "Cartesian path [%.2f%%] achieved", fraction * 100.0);
 
         // Execute the path.
-        if (fraction >= 0.9) {
+        if (fraction >= 0.9)
             this->planner_group_->execute(trajectory);
-        } else {
-            RCLCPP_WARN(this->get_logger(), "Could not compute full path. Aborting.");
-        }
+        else
+            RCLCPP_WARN(this->get_logger(), "Could not compute full path. Aborting...");
     }
 
     // Function that process the goal required by the Client and response to it
-    void execute(const std::shared_ptr<GoalHandlePlan> goal_handle) {
+    void execute(const std::shared_ptr<GoalHandlePlan> goal_handle)
+    {
+
+        // TO REMOVE
+        //auto pose = planner_group_->getCurrentPose();
+        //std::cout << "INITIAL POSE" << std::endl
+        //    << "x:" << pose.pose.position.x << std::endl
+        //    << "y:" << pose.pose.position.y << std::endl
+        //    << "z:" << pose.pose.position.z << std::endl
+
+        //    << "x:" << pose.pose.orientation.x << std::endl
+        //    << "y:" << pose.pose.orientation.y << std::endl
+        //    << "z:" << pose.pose.orientation.z << std::endl
+        //    << "w:" << pose.pose.orientation.w << std::endl
+        //    << "frame: " << pose.header.frame_id << std::endl;
 
         // Recover goal send by the Client
         const auto goal = goal_handle->get_goal(); 
-        geometry_msgs::msg::PoseStamped target_ee_pose = goal->target_ee_pose;
-        std::string move_type = goal->move_type.data;
 
-        std::cout << "TARGET POSE" << std::endl
-            << "x:" << target_ee_pose.pose.position.x << std::endl
-            << "y:" << target_ee_pose.pose.position.y << std::endl
-            << "z:" << target_ee_pose.pose.position.z << std::endl
+        // TO REMOVE
+        //std::cout << "TARGET POSE" << std::endl
+        //    << "x:" << target_ee_pose.pose.position.x << std::endl
+        //    << "y:" << target_ee_pose.pose.position.y << std::endl
+        //    << "z:" << target_ee_pose.pose.position.z << std::endl
 
-            << "x:" << target_ee_pose.pose.orientation.x << std::endl
-            << "y:" << target_ee_pose.pose.orientation.y << std::endl
-            << "z:" << target_ee_pose.pose.orientation.z << std::endl
-            << "w:" << target_ee_pose.pose.orientation.w << std::endl;
+        //    << "x:" << target_ee_pose.pose.orientation.x << std::endl
+        //    << "y:" << target_ee_pose.pose.orientation.y << std::endl
+        //    << "z:" << target_ee_pose.pose.orientation.z << std::endl
+        //    << "w:" << target_ee_pose.pose.orientation.w << std::endl
+        //    << "frame" << target_ee_pose.header.frame_id << std::endl;
 
 
         // Inizialization of the Feedback and Result as shared pointer
         auto feedback = std::make_shared<Plan::Feedback>(); // Feedback
 
         // Feedback callback
-        auto send_feedback = [this, goal_handle, feedback]()
-        {
-            feedback->current_ee_pose = planner_group_->getCurrentPose();
-            goal_handle->publish_feedback(feedback);
-            double x = feedback->current_ee_pose.pose.position.x;
-            double y = feedback->current_ee_pose.pose.position.y;
-            double z = feedback->current_ee_pose.pose.position.z;
-            RCLCPP_INFO(this->get_logger(), 
-                    "Publish feedback [%f, %f, %f]", x, y, z);
-
-        };
+        auto send_feedback = 
+            [this, goal_handle, feedback]() {
+                feedback->current_ee_pose = planner_group_->getCurrentPose();
+                goal_handle->publish_feedback(feedback);
+            };
 
         rclcpp::TimerBase::SharedPtr timer = 
             this->create_wall_timer(100ms, send_feedback, cb_group_);
@@ -203,22 +213,23 @@ private:
         auto result = std::make_shared<Plan::Result>();
 
         // Set the reference frame of the target.
-        planner_group_->setPoseReferenceFrame(target_ee_pose.header.frame_id.c_str());
+        //planner_group_->setPoseReferenceFrame(target_ee_pose.header.frame_id.c_str());
 
-        if (move_type == "path_cartesian")
-            plan_execute_cartesian(target_ee_pose);
-        else if (move_type == "free_cartesian")
-            plan_execute(target_ee_pose);
+        if (goal->move_type.data == "path_cartesian")
+            plan_execute_cartesian(goal->target_ee_pose);
+        else if (goal->move_type.data == "free_cartesian")
+            plan_execute(goal->target_ee_pose);
 
-        // Stop timer
+        // Stop send_feedback callback.
         timer->cancel();
 
         // Check if goal is done
-        if (rclcpp::ok()) { // Check if the node is still operative
-                            // notice this line, at left sequence is the field of result described in .action, at right sequence 
-                            // is the alias to the field partial_sequence of feedback. Indeed at the end the partial sequence correspond with the complete one
+        if (rclcpp::ok())
+        {
             result->final_ee_pose = feedback->current_ee_pose; 
-            goal_handle->succeed(result); // Set goal SUCCEEDED and sent result to Client
+            goal_handle->succeed(result);
+
+            // TO REMOVE
             double x = result->final_ee_pose.pose.position.x;
             double y = result->final_ee_pose.pose.position.y;
             double z = result->final_ee_pose.pose.position.z;
@@ -231,22 +242,22 @@ private:
 
 } // end namespace
 
-int main(int argc, char ** argv)
+int main(int argc, char** argv)
 {
-  rclcpp::init(argc, argv);
+    rclcpp::init(argc, argv);
 
-  // Node options.
-  rclcpp::NodeOptions node_options;
-  node_options.automatically_declare_parameters_from_overrides(true);
+    // Node options.
+    rclcpp::NodeOptions node_options;
+    node_options.automatically_declare_parameters_from_overrides(true);
 
-  // Create the node.
-  auto node = std::make_shared<plan_action::PlannerActionServer>(node_options);
+    // Create the node.
+    auto node = std::make_shared<plan_action::PlannerActionServer>(node_options);
 
-  // Needed to manage movit callbacks.
-  rclcpp::executors::MultiThreadedExecutor executor;
-  executor.add_node(node);
-  executor.spin();
+    // Needed to manage movit callbacks.
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
 
-  rclcpp::shutdown();
-  return 0;
+    rclcpp::shutdown();
+    return 0;
 }
