@@ -17,7 +17,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
-
+#include "std_msgs/msg/float32.hpp"
 #include <cmath>
 
 // Transformation libraries.
@@ -65,6 +65,7 @@ public:
     node_options_ = options;
     tag1_pos = std::vector<double>{3, 0.0};
     tag10_pos = std::vector<double>{0.57, -0.01, 0.44};
+    get_tag_position();
     
     // Here we set the initial pose
     current_pose.header.frame_id = "base_link";
@@ -96,6 +97,18 @@ public:
     this->client_ptr_ = rclcpp_action::create_client<Plan>(
       this,
       "plan");
+
+    publisher_ = this->create_publisher<std_msgs::msg::Float32>(
+            "/gripper_move", 10 
+    );
+
+    // TODO
+    // Init subscriber.
+    //subscription_ = this->create_subscription<std_msgs::msg::Bool>(
+    //        "/gripper_status", 
+    //        10,
+    //        std::bind(&read_joint_val, this, std::placeholders::_1)
+    //);
 
     // Here we define the timer callback, which send the goal at intervals.
     auto timer_callback_lambda = [this](){ return this->send_goal(); };
@@ -177,50 +190,216 @@ public:
     // Here we define the goal.
     auto goal_msg = Plan::Goal();
     
-    get_tag_position();
 
-    // Here we set the goal message.
+    switch(action){
 
-    // set new pose based on position of tag1.
-    current_pose.pose.position.x = tag1_pos[0] + 0.03;
-    current_pose.pose.position.y = tag1_pos[1] + 0.16;
-    current_pose.pose.position.z = tag1_pos[2] + 0.04;
+    case 0:  
+        {auto gripper_msg = std_msgs::msg::Float32();
+      gripper_msg.data = to_rad(0.0);
+      publisher_->publish(gripper_msg);
 
-    // define orientation (hard-coded):
+      // Here we set the goal message.
 
-    // first get the current orientation (wrt base_link).
-    tf2::Quaternion q_attuale;
-    tf2::fromMsg(current_pose.pose.orientation, q_attuale);
+      // set new pose based on position of tag1.
+      current_pose.pose.position.x = tag1_pos[0] + 0.03;
+      current_pose.pose.position.y = tag1_pos[1] + 0.16;
+      current_pose.pose.position.z = tag1_pos[2] + 0.04;
 
-    // define new desired orientation
-    tf2::Quaternion q_rotazione;
-    q_rotazione.setRPY(0, M_PI, 0 ); // <--- DEVE ESSERE M_PI, non 0
+      // define orientation (hard-coded):
 
-    // compute new orientation by composition of rotations
-    tf2::Quaternion q_finale = q_attuale * q_rotazione;
-    q_finale.normalize();
+      // first get the current orientation (wrt base_link).
+      tf2::Quaternion q_attuale;
+      tf2::fromMsg(current_pose.pose.orientation, q_attuale);
 
-    // set final desired values
-    current_pose.pose.orientation.x = q_finale.x();
-    current_pose.pose.orientation.y = q_finale.y();
-    current_pose.pose.orientation.z = q_finale.z();
-    current_pose.pose.orientation.w = q_finale.w();
-    current_pose.header.frame_id = FRAME_ID;
+      // define new desired orientation
+      tf2::Quaternion q_rotazione;
+      q_rotazione.setRPY(0, M_PI, 0 ); // <--- DEVE ESSERE M_PI, non 0
 
-    std::cout << "initial: (x: " 
-       << current_pose.pose.position.x << ", y: "
-       << current_pose.pose.position.y << ", z: "
-       << current_pose.pose.position.z << ", x orientation: "
-       << current_pose.pose.orientation.x << ", y orientation: "
-       << current_pose.pose.orientation.y << ", z orientation: "
-       << current_pose.pose.orientation.z << ", w orientation: "
-       << current_pose.pose.orientation.w <<") "<< std::endl;
+      // compute new orientation by composition of rotations
+      tf2::Quaternion q_finale = q_attuale * q_rotazione;
+      q_finale.normalize();
+
+      // set final desired values
+      current_pose.pose.orientation.x = q_finale.x();
+      current_pose.pose.orientation.y = q_finale.y();
+      current_pose.pose.orientation.z = q_finale.z();
+      current_pose.pose.orientation.w = q_finale.w();
+      current_pose.header.frame_id = FRAME_ID;
+
+      std::cout << "initial: (x: " 
+        << current_pose.pose.position.x << ", y: "
+        << current_pose.pose.position.y << ", z: "
+        << current_pose.pose.position.z << ", x orientation: "
+        << current_pose.pose.orientation.x << ", y orientation: "
+        << current_pose.pose.orientation.y << ", z orientation: "
+        << current_pose.pose.orientation.z << ", w orientation: "
+        << current_pose.pose.orientation.w <<") "<< std::endl;
 
 
-    goal_msg.target_ee_pose = current_pose;
-    auto message = std_msgs::msg::String();
-    message.data = "free_cartesian";
-    goal_msg.move_type = message;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "free_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 1:
+      {current_pose.pose.position.z -= 0.08;
+
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 2:
+      {
+      auto gripper_msg = std_msgs::msg::Float32();
+      gripper_msg.data = to_rad(5.0);
+      publisher_->publish(gripper_msg);
+
+      current_pose.pose.position.z += 0.2;
+
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+    
+    case 3:
+      {current_pose.pose.position.x = tag10_pos[0] - 0.25;
+      current_pose.pose.position.y = tag10_pos[1] + 0.12;
+      //pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
+
+      // Compute new desired orientation.
+
+      tf2::Quaternion q_attuale;
+      tf2::fromMsg(current_pose.pose.orientation, q_attuale);
+
+      tf2::Quaternion q_rotazione;
+      q_rotazione.setRPY(0, 3*M_PI/2, 0 );
+
+      // compute new orientation by composition of rotations
+      tf2::Quaternion q_finale = q_attuale * q_rotazione;
+      q_finale.normalize();
+
+      // set final desired values
+      current_pose.pose.orientation.x = q_finale.x();
+      current_pose.pose.orientation.y = q_finale.y();
+      current_pose.pose.orientation.z = q_finale.z();
+      current_pose.pose.orientation.w = q_finale.w();
+      current_pose.header.frame_id = FRAME_ID;
+
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 4:
+      {current_pose.pose.position.z -=0.2;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 5:
+      {
+      auto gripper_msg = std_msgs::msg::Float32();
+      gripper_msg.data = to_rad(0.0);
+      publisher_->publish(gripper_msg);
+
+
+      current_pose.pose.position.z = tag10_pos[2] + 0.04;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+    
+    case 6:
+      {current_pose.pose.position.x = tag10_pos[0] - 0.13;
+      current_pose.pose.position.y = tag10_pos[1] + 0.008;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 7:
+      {current_pose.pose.position.z -=0.1;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 8:
+      {
+      auto gripper_msg = std_msgs::msg::Float32();
+      gripper_msg.data = to_rad(5.0);
+      publisher_->publish(gripper_msg);
+
+      current_pose.pose.position.z +=0.1;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 9:
+      {current_pose.pose.position.x = tag1_pos[0] + 0.03;
+      current_pose.pose.position.y = tag1_pos[1] + 0.16;
+
+      // Compute new desired orientation.
+
+      tf2::Quaternion q_attuale;
+      tf2::fromMsg(current_pose.pose.orientation, q_attuale);
+
+      tf2::Quaternion q_rotazione;
+      q_rotazione.setRPY(0, -3*M_PI/2, 0 );
+
+      // compute new orientation by composition of rotations
+      tf2::Quaternion q_finale = q_attuale * q_rotazione;
+      q_finale.normalize();
+
+      // set final desired values
+      current_pose.pose.orientation.x = q_finale.x();
+      current_pose.pose.orientation.y = q_finale.y();
+      current_pose.pose.orientation.z = q_finale.z();
+      current_pose.pose.orientation.w = q_finale.w();
+      current_pose.header.frame_id = FRAME_ID;
+
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    case 10: 
+      {current_pose.pose.position.z -=0.1;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+    
+    case 11: 
+      {
+      auto gripper_msg = std_msgs::msg::Float32();
+      gripper_msg.data = to_rad(0.0);
+      publisher_->publish(gripper_msg);
+
+      current_pose.pose.position.z +=0.1;
+      goal_msg.target_ee_pose = current_pose;
+      auto message = std_msgs::msg::String();
+      message.data = "path_cartesian";
+      goal_msg.move_type = message;}
+      break;
+
+    }
+    std::cout<<"VALUE OF ACTION: "<<action<<std::endl;
+    action ++;
 
 
     // Here we sent the goal to server.
@@ -264,6 +443,7 @@ public:
     {
       switch (result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
+          send_goal();
           break;
         case rclcpp_action::ResultCode::ABORTED:
           RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
@@ -308,6 +488,9 @@ private:
   std::vector<BoxConfig> boxes_to_add;
   bool box_added;
   rclcpp::NodeOptions node_options_;
+  int action = 0;
+
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
 };  // class CsActionClient
 
 }  // namespace custom_action_cpp
