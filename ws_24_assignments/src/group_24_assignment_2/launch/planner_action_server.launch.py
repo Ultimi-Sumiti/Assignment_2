@@ -36,10 +36,10 @@ def generate_launch_description():
 
     moveit_config_pkg = "ir_movit_config"
     moveit_config = MoveItConfigsBuilder("ir_gripper", package_name=moveit_config_pkg).to_moveit_configs()
-    test_node = Node(
+    planner_node = Node(
         package=pkg_name,
         executable="planner_action_server",
-        name="planner_action_server_test",
+        name="planner_action_server",
         parameters=[
             {"use_sim_time": True},
             moveit_config.to_dict(),
@@ -48,11 +48,23 @@ def generate_launch_description():
         emulate_tty=True
     )
 
+    gripper_node = Node(
+        package="group_24_assignment_2",
+        executable="gripper",
+        name="gripper",
+        parameters=[
+            {"use_sim_time": True},
+            moveit_config.to_dict(),
+        ],
+        output="screen",
+    )
+
     # Create launch descriptor.
     ld = LaunchDescription()
     
     ld.add_action(assignment2_launch)
     ld.add_action(apriltag_launch)
-    ld.add_action(test_node)
+    ld.add_action(planner_node)
+    ld.add_action(gripper_node)
 
     return ld
