@@ -49,6 +49,9 @@ public:
         move_gripper(rad);
         
         // TODO: return the status.
+        std_msgs::msg::Bool message;
+        message.data = true;
+        publisher_->publish(message);
     }
 
 private:
@@ -60,6 +63,9 @@ private:
         timer_->cancel();
         auto node_ptr = this->shared_from_this();
         gripper_group_= std::make_shared<MoveGroupInterface>(node_ptr, "ir_gripper");
+        gripper_group_->setMaxVelocityScalingFactor(1.0);
+        gripper_group_->setMaxAccelerationScalingFactor(1.0);
+        move_gripper(0.8);
         RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
     }
 

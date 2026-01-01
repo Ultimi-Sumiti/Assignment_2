@@ -18,6 +18,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include "std_msgs/msg/float32.hpp"
+#include "std_msgs/msg/bool.hpp"
 #include <cmath>
 
 // Transformation libraries.
@@ -104,11 +105,11 @@ public:
 
     // TODO
     // Init subscriber.
-    //subscription_ = this->create_subscription<std_msgs::msg::Bool>(
-    //        "/gripper_status", 
-    //        10,
-    //        std::bind(&read_joint_val, this, std::placeholders::_1)
-    //);
+    subscription_ = this->create_subscription<std_msgs::msg::Bool>(
+            "/gripper_status", 
+            10,
+            std::bind(&CsActionClient::read_gripper_status, this, std::placeholders::_1)
+    );
 
     // Here we define the timer callback, which send the goal at intervals.
     auto timer_callback_lambda = [this](){ return this->send_goal(); };
@@ -117,6 +118,13 @@ public:
     this->timer_ = this->create_wall_timer(
       std::chrono::milliseconds(500),
       timer_callback_lambda);
+
+  }
+
+  void read_gripper_status(std_msgs::msg::Bool::UniquePtr msg)
+  {
+      bool status = msg->data;
+      RCLCPP_INFO(this->get_logger(), "Gripper status: '%d'", status);
   }
 
   void get_tag_position(){
@@ -126,7 +134,7 @@ public:
     // Spin TF node in a separate thread.
     std::thread([&tf_receiver_node]() { rclcpp::spin(tf_receiver_node); }).detach();
     // Allow moveit to initialize.
-    std::this_thread::sleep_for(std::chrono::seconds(2)); 
+    std::this_thread::sleep_for(std::chrono::seconds(1)); 
 
     RCLCPP_INFO(this->get_logger(), "Waiting for AprilTags transforms...");
     bool tags_found = false;
@@ -181,6 +189,7 @@ public:
     this->timer_->cancel();
 
     // Here this client is waiting for the action from the server.
+    std::cout << "WAIT" << std::endl;
     if (!this->client_ptr_->wait_for_action_server()) {
       // If the timer is expired we shutdown.
       RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting");
@@ -256,6 +265,7 @@ public:
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(5.0);
       publisher_->publish(gripper_msg);
+      std::this_thread::sleep_for(std::chrono::seconds(1));
 
       current_pose.pose.position.z += 0.2;
 
@@ -263,6 +273,7 @@ public:
       auto message = std_msgs::msg::String();
       message.data = "path_cartesian";
       goal_msg.move_type = message;}
+      //rclcpp::shutdown();
       break;
     
     case 3:
@@ -308,6 +319,7 @@ public:
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(0.0);
       publisher_->publish(gripper_msg);
+      std::this_thread::sleep_for(std::chrono::seconds(1));
 
 
       current_pose.pose.position.z = tag10_pos[2] + 0.04;
@@ -339,6 +351,7 @@ public:
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(5.0);
       publisher_->publish(gripper_msg);
+      std::this_thread::sleep_for(std::chrono::seconds(1));
 
       current_pose.pose.position.z +=0.1;
       goal_msg.target_ee_pose = current_pose;
@@ -389,6 +402,7 @@ public:
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(0.0);
       publisher_->publish(gripper_msg);
+      std::this_thread::sleep_for(std::chrono::seconds(1));
 
       current_pose.pose.position.z +=0.1;
       goal_msg.target_ee_pose = current_pose;
@@ -396,6 +410,9 @@ public:
       message.data = "path_cartesian";
       goal_msg.move_type = message;}
       break;
+
+    default:
+        rclcpp::shutdown();
 
     }
     std::cout<<"VALUE OF ACTION: "<<action<<std::endl;
@@ -473,7 +490,7 @@ public:
 
       // Here we print the results received if the code was succeded.
       RCLCPP_INFO(this->get_logger(), ss.str().c_str());
-      rclcpp::shutdown();
+      //rclcpp::shutdown();
     };
     // Here we send the goal and the options to the client and we get the result.
     this->client_ptr_->async_send_goal(goal_msg, send_goal_options);
@@ -491,6 +508,7 @@ private:
   int action = 0;
 
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr subscription_;
 };  // class CsActionClient
 
 }  // namespace custom_action_cpp
