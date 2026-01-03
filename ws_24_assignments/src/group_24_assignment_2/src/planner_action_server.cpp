@@ -104,6 +104,9 @@ private:
 
     MoveItErrorCode plan_execute(const geometry_msgs::msg::PoseStamped& pose)
     {
+        planner_group_->setMaxVelocityScalingFactor(1.0);
+        planner_group_->setMaxAccelerationScalingFactor(1.0);
+
         // Set target pose.
         planner_group_->setPoseTarget(pose);
 
@@ -139,6 +142,9 @@ private:
 
     MoveItErrorCode plan_execute_cartesian(const geometry_msgs::msg::PoseStamped& target)
     {
+        planner_group_->setMaxVelocityScalingFactor(0.1);
+        planner_group_->setMaxAccelerationScalingFactor(0.1);
+
         // Compute the cartesian path.
         geometry_msgs::msg::Pose start_pose = this->planner_group_->getCurrentPose().pose;
 

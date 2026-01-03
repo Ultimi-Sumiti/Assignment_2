@@ -276,7 +276,7 @@ public:
       while (!gripper_status_);
           //std::cout << "waiting..." << std::endl;
 
-      current_pose.pose.position.z += 0.2;
+      current_pose.pose.position.z += 0.25;
 
       goal_msg.target_ee_pose = current_pose;
       auto message = std_msgs::msg::String();
@@ -287,7 +287,7 @@ public:
     
     case 3:
       {current_pose.pose.position.x = tag10_pos[0] - 0.25;
-      current_pose.pose.position.y = tag10_pos[1] + 0.12;
+      current_pose.pose.position.y = tag10_pos[1] + 0.15;
       //pose.pose.position.z = tag10_pos[2] - 0.05 + 0.2;
 
       // Compute new desired orientation.
@@ -316,7 +316,7 @@ public:
       break;
 
     case 4:
-      {current_pose.pose.position.z -=0.2;
+      {current_pose.pose.position.z -=0.25;
       goal_msg.target_ee_pose = current_pose;
       auto message = std_msgs::msg::String();
       message.data = "path_cartesian";
@@ -333,7 +333,7 @@ public:
       while (!gripper_status_);
 
 
-      current_pose.pose.position.z = tag10_pos[2] + 0.04;
+      current_pose.pose.position.z = tag10_pos[2] + 0.1;
       goal_msg.target_ee_pose = current_pose;
       auto message = std_msgs::msg::String();
       message.data = "path_cartesian";
@@ -341,8 +341,8 @@ public:
       break;
     
     case 6:
-      {current_pose.pose.position.x = tag10_pos[0] - 0.13;
-      current_pose.pose.position.y = tag10_pos[1] + 0.008;
+      {current_pose.pose.position.x = tag10_pos[0] - 0.12;
+      current_pose.pose.position.y = tag10_pos[1] + 0.009;
       goal_msg.target_ee_pose = current_pose;
       auto message = std_msgs::msg::String();
       message.data = "path_cartesian";
@@ -350,7 +350,7 @@ public:
       break;
 
     case 7:
-      {current_pose.pose.position.z -=0.1;
+      {current_pose.pose.position.z -= 0.15;
       goal_msg.target_ee_pose = current_pose;
       auto message = std_msgs::msg::String();
       message.data = "path_cartesian";
