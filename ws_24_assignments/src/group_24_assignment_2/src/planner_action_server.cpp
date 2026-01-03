@@ -60,6 +60,7 @@ public:
                 auto exe_callback = 
                     [this, goal_handle]() {return this->execute(goal_handle);};
                 std::thread{exe_callback}.detach();
+                //this->execute(goal_handle);
             };
 
         this->action_server_ = rclcpp_action::create_server<Plan>(
@@ -101,7 +102,7 @@ private:
         RCLCPP_INFO(this->get_logger(), "MoveIt Initialized!");
     }
 
-    void plan_execute(const geometry_msgs::msg::PoseStamped& pose)
+    MoveItErrorCode plan_execute(const geometry_msgs::msg::PoseStamped& pose)
     {
         // Set target pose.
         planner_group_->setPoseTarget(pose);
@@ -127,15 +128,16 @@ private:
             RCLCPP_INFO(this->get_logger(), 
                     "Planning SUCCESSFUL. Executing..."
             );
-            planner_group_->execute(plan_);
+            return planner_group_->execute(plan_);
         } else {
             RCLCPP_ERROR(this->get_logger(), 
                 "Planning to current pose FAILED (GOAL_STATE_INVALID likely)."
             );
         }
+        return MoveItErrorCode::ABORT;
     }
 
-    void plan_execute_cartesian(const geometry_msgs::msg::PoseStamped& target)
+    MoveItErrorCode plan_execute_cartesian(const geometry_msgs::msg::PoseStamped& target)
     {
         // Compute the cartesian path.
         geometry_msgs::msg::Pose start_pose = this->planner_group_->getCurrentPose().pose;
@@ -158,9 +160,11 @@ private:
 
         // Execute the path.
         if (fraction >= 0.9)
-            this->planner_group_->execute(trajectory);
+            return planner_group_->execute(trajectory);
         else
             RCLCPP_WARN(this->get_logger(), "Could not compute full path. Aborting...");
+
+        return MoveItErrorCode::ABORT;
     }
 
     // Function that process the goal required by the Client and response to it
@@ -215,10 +219,11 @@ private:
         // Set the reference frame of the target.
         //planner_group_->setPoseReferenceFrame(target_ee_pose.header.frame_id.c_str());
 
+        MoveItErrorCode res = MoveItErrorCode::ABORT;
         if (goal->move_type.data == "path_cartesian")
-            plan_execute_cartesian(goal->target_ee_pose);
+            res = plan_execute_cartesian(goal->target_ee_pose);
         else if (goal->move_type.data == "free_cartesian")
-            plan_execute(goal->target_ee_pose);
+            res = plan_execute(goal->target_ee_pose);
 
         // Stop send_feedback callback.
         timer->cancel();
@@ -226,15 +231,20 @@ private:
         // Check if goal is done
         if (rclcpp::ok())
         {
-            result->final_ee_pose = feedback->current_ee_pose; 
-            goal_handle->succeed(result);
+            if (res == MoveItErrorCode::SUCCESS) {
+                result->final_ee_pose = feedback->current_ee_pose; 
+                goal_handle->succeed(result);
+            } else {
+                result->final_ee_pose = feedback->current_ee_pose; 
+                goal_handle->abort(result);
+            }
 
             // TO REMOVE
-            double x = result->final_ee_pose.pose.position.x;
-            double y = result->final_ee_pose.pose.position.y;
-            double z = result->final_ee_pose.pose.position.z;
-            RCLCPP_INFO(this->get_logger(), 
-                    "Goal succeeded [%f, %f, %f]", x, y, z);
+            //double x = result->final_ee_pose.pose.position.x;
+            //double y = result->final_ee_pose.pose.position.y;
+            //double z = result->final_ee_pose.pose.position.z;
+            //RCLCPP_INFO(this->get_logger(), 
+            //        "Goal succeeded [%f, %f, %f]", x, y, z);
         }
     };
 

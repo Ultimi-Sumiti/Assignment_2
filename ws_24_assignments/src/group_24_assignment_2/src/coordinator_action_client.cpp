@@ -62,6 +62,10 @@ public:
   explicit CsActionClient(const rclcpp::NodeOptions & options)
   : Node("cs_action_client", options)
   {
+        // Needed to run callbacks in parallel.
+        cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+        auto sub_opts = rclcpp::SubscriptionOptions();
+        sub_opts.callback_group = cb_group_;
 
     node_options_ = options;
     tag1_pos = std::vector<double>{3, 0.0};
@@ -108,7 +112,8 @@ public:
     subscription_ = this->create_subscription<std_msgs::msg::Bool>(
             "/gripper_status", 
             10,
-            std::bind(&CsActionClient::read_gripper_status, this, std::placeholders::_1)
+            std::bind(&CsActionClient::read_gripper_status, this, std::placeholders::_1),
+            sub_opts
     );
 
     // Here we define the timer callback, which send the goal at intervals.
@@ -125,6 +130,7 @@ public:
   {
       bool status = msg->data;
       RCLCPP_INFO(this->get_logger(), "Gripper status: '%d'", status);
+      gripper_status_ = status;
   }
 
   void get_tag_position(){
@@ -262,10 +268,13 @@ public:
 
     case 2:
       {
+      gripper_status_ = false;
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(5.0);
       publisher_->publish(gripper_msg);
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      //std::this_thread::sleep_for(std::chrono::seconds(1));
+      while (!gripper_status_);
+          //std::cout << "waiting..." << std::endl;
 
       current_pose.pose.position.z += 0.2;
 
@@ -316,10 +325,12 @@ public:
 
     case 5:
       {
+       gripper_status_ = false;
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(0.0);
       publisher_->publish(gripper_msg);
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      //std::this_thread::sleep_for(std::chrono::seconds(1));
+      while (!gripper_status_);
 
 
       current_pose.pose.position.z = tag10_pos[2] + 0.04;
@@ -348,10 +359,12 @@ public:
 
     case 8:
       {
+      gripper_status_ = false;
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(5.0);
       publisher_->publish(gripper_msg);
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      //std::this_thread::sleep_for(std::chrono::seconds(1));
+      while (!gripper_status_);
 
       current_pose.pose.position.z +=0.1;
       goal_msg.target_ee_pose = current_pose;
@@ -399,10 +412,12 @@ public:
     
     case 11: 
       {
+      gripper_status_ = false;
       auto gripper_msg = std_msgs::msg::Float32();
       gripper_msg.data = to_rad(0.0);
       publisher_->publish(gripper_msg);
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      //std::this_thread::sleep_for(std::chrono::seconds(1));
+      while (!gripper_status_);
 
       current_pose.pose.position.z +=0.1;
       goal_msg.target_ee_pose = current_pose;
@@ -464,7 +479,9 @@ public:
           break;
         case rclcpp_action::ResultCode::ABORTED:
           RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
-          rclcpp::shutdown();
+          action--;
+          send_goal();
+          //rclcpp::shutdown();
           return;
         case rclcpp_action::ResultCode::CANCELED:
           RCLCPP_WARN(this->get_logger(), "Goal was canceled");
@@ -509,16 +526,35 @@ private:
 
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr publisher_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr subscription_;
+  bool gripper_status_;
+  rclcpp::CallbackGroup::SharedPtr cb_group_;
 };  // class CsActionClient
 
 }  // namespace custom_action_cpp
 
 int main(int argc, char ** argv)
 {
-  rclcpp::init(argc, argv);
-  auto node_options = rclcpp::NodeOptions();
-  auto node = std::make_shared<custom_action_cpp::CsActionClient>(node_options);
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
+  //rclcpp::init(argc, argv);
+  //auto node_options = rclcpp::NodeOptions();
+  //auto node = std::make_shared<custom_action_cpp::CsActionClient>(node_options);
+  //rclcpp::spin(node);
+  //rclcpp::shutdown();
+  //return 0;
+
+    rclcpp::init(argc, argv);
+
+    // Node options.
+    rclcpp::NodeOptions node_options;
+    node_options.automatically_declare_parameters_from_overrides(true);
+
+    // Create the node.
+    auto node = std::make_shared<custom_action_cpp::CsActionClient>(node_options);
+
+    // Needed to manage movit callbacks.
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(node);
+    executor.spin();
+
+    rclcpp::shutdown();
+    return 0;
 }
