@@ -62,9 +62,9 @@ def generate_launch_description():
     # Create launch descriptor.
     ld = LaunchDescription()
     
-    ld.add_action(assignment2_launch)
-    ld.add_action(apriltag_launch)
+    #ld.add_action(assignment2_launch)
+    #ld.add_action(apriltag_launch)
     ld.add_action(planner_node)
-    ld.add_action(gripper_node)
+    #ld.add_action(gripper_node)
 
     return ld

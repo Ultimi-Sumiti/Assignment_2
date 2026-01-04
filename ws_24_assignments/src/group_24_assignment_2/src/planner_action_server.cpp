@@ -165,7 +165,7 @@ private:
         RCLCPP_INFO(this->get_logger(), "Cartesian path [%.2f%%] achieved", fraction * 100.0);
 
         // Execute the path.
-        if (fraction >= 0.9)
+        if (fraction >= 0.85)
             return planner_group_->execute(trajectory);
         else
             RCLCPP_WARN(this->get_logger(), "Could not compute full path. Aborting...");
