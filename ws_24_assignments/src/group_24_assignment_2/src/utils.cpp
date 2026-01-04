@@ -2,16 +2,20 @@
 
 
 // NUOVO METODO: Ritorna true se trova le trasformate, e riempie i vettori passati per reference
-bool TryNode::get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10_xyz) {
+bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10_xyz, const tf2_ros::Buffer& tf_buffer_) {
     geometry_msgs::msg::TransformStamped T_tag1_base;
     geometry_msgs::msg::TransformStamped T_tag10_base;
+    
+    const std::string tag1_frame_ = "tag36h11:1";
+    const std::string tag10_frame_ = "tag36h11:10";
+    const std::string base_frame_ = "base_link";
 
     try {
         // Cerchiamo le trasformate
-        T_tag1_base = this->tf_buffer_->lookupTransform(
+        T_tag1_base = tf_buffer_.lookupTransform(
             base_frame_, tag1_frame_, tf2::TimePointZero, std::chrono::milliseconds(100)); // Timeout breve per non bloccare
         
-        T_tag10_base = this->tf_buffer_->lookupTransform(
+        T_tag10_base = tf_buffer_.lookupTransform(
             base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
 
         // Salviamo i risultati nei vettori passati dal main
@@ -31,7 +35,7 @@ bool TryNode::get_tags_position(std::vector<double>& tag1_xyz, std::vector<doubl
     }
 }
 
-
+ 
 
 std::vector<moveit_msgs::msg::CollisionObject> get_collision_object(std::vector<BoxConfig>& boxes_to_add, const std::string FRAME_ID){
 

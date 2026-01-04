@@ -220,13 +220,14 @@ public:
       gripper_status_ = status;
   }
 
-  void get_tag_position(){
 
-    // ### GET APRIL-TAGS POSITION ###
-    auto tf_receiver_node = std::make_shared<TryNode>(node_options_);
-    // Spin TF node in a separate thread.
-    std::thread([&tf_receiver_node]() { rclcpp::spin(tf_receiver_node); }).detach();
-    // Allow moveit to initialize.
+
+  void get_tag_position(){
+    
+    // Init transform buffer and transform listener.
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
     std::this_thread::sleep_for(std::chrono::seconds(1)); 
 
     RCLCPP_INFO(this->get_logger(), "Waiting for AprilTags transforms...");
@@ -234,7 +235,7 @@ public:
     int max_retries = 20; // Prova per 20 secondi
     
     while(rclcpp::ok() && !tags_found && max_retries > 0) {
-        if(tf_receiver_node->get_tags_position(tag1_pos, tag10_pos)) {
+        if(get_tags_position(tag1_pos, tag10_pos, *tf_buffer_)) {
             tags_found = true;
             RCLCPP_INFO(this->get_logger(), "Tags Found! Tag1: [%.2f, %.2f, %.2f]", tag1_pos[0], tag1_pos[1], tag1_pos[2]);
             RCLCPP_INFO(this->get_logger(), "Tags Found! Tag10: [%.2f, %.2f, %.2f]", tag10_pos[0], tag10_pos[1], tag10_pos[2]);
@@ -256,6 +257,9 @@ public:
     }
   }
 
+
+
+ 
   void add_boxes(){
     // Correcting boxes based on current values of tags.
     boxes_to_add = {
