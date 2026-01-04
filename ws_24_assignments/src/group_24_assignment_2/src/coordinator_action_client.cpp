@@ -281,6 +281,10 @@ public:
     // This function set to 0 the timer while it is executing.
     this->timer_->cancel();
 
+    if(action > 11){
+      rclcpp::shutdown();
+    }
+
     // Here this client is waiting for the action from the server.
     std::cout << "WAIT" << std::endl;
     if (!this->client_ptr_->wait_for_action_server()) {
@@ -382,9 +386,7 @@ public:
     {
       switch (result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
-          if(action < 12){
-            send_goal();
-          }
+          send_goal();
           break;
         case rclcpp_action::ResultCode::ABORTED:
           RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
