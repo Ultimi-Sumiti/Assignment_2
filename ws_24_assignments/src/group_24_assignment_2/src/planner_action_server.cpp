@@ -8,6 +8,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <moveit/move_group_interface/move_group_interface.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 using namespace std::chrono_literals;
 
@@ -149,18 +150,37 @@ private:
         geometry_msgs::msg::Pose start_pose = this->planner_group_->getCurrentPose().pose;
 
         // Define Waypoints: from start pose to target pose.
-        std::vector<geometry_msgs::msg::Pose> waypoints = {start_pose, target.pose};
+        std::vector<geometry_msgs::msg::Pose> waypoints;
 
         // Define trajectory parameters.
         moveit_msgs::msg::RobotTrajectory trajectory;
-        const double ee_step = 0.01; // Resolution of path (1cm)..
 
-        // Compute the trajectory.
-        double fraction = this->planner_group_->computeCartesianPath(
-                waypoints,
-                ee_step,
-                trajectory
-        );
+        double ee_step = 0.01; // Resolution of path (1cm)..
+
+        double fraction = 0.8;
+        int cnt = 1;
+        while(fraction < 0.9 && cnt < 11 ){
+            // Compute the trajectory.
+            if(cnt > 1){
+                std::cout<<"attemp: "<<cnt<<std::endl;
+                start_pose.position.set__x(start_pose.position.x + 0.0001)
+                .set__y(start_pose.position.y + 0.0001)
+                .set__z(start_pose.position.z + 0.0001);
+
+                tf2::Quaternion q;
+                tf2::fromMsg(start_pose.orientation, q);
+                q.normalize();
+                start_pose.orientation = tf2::toMsg(q);
+            }
+            waypoints = {start_pose, target.pose};
+            fraction = this->planner_group_->computeCartesianPath(
+                    waypoints,
+                    ee_step,
+                    trajectory
+            );
+            ee_step += 0.01;
+            cnt ++;
+        }
 
         RCLCPP_INFO(this->get_logger(), "Cartesian path [%.2f%%] achieved", fraction * 100.0);
 
