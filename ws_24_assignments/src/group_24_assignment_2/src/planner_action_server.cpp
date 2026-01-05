@@ -157,30 +157,12 @@ private:
 
         double ee_step = 0.01; // Resolution of path (1cm)..
 
-        double fraction = 0.8;
-        int cnt = 1;
-        while(fraction < 0.9 && cnt < 11 ){
-            // Compute the trajectory.
-            if(cnt > 1){
-                std::cout<<"attemp: "<<cnt<<std::endl;
-                start_pose.position.set__x(start_pose.position.x + 0.0001)
-                .set__y(start_pose.position.y + 0.0001)
-                .set__z(start_pose.position.z + 0.0001);
-
-                tf2::Quaternion q;
-                tf2::fromMsg(start_pose.orientation, q);
-                q.normalize();
-                start_pose.orientation = tf2::toMsg(q);
-            }
-            waypoints = {start_pose, target.pose};
-            fraction = this->planner_group_->computeCartesianPath(
-                    waypoints,
-                    ee_step,
-                    trajectory
-            );
-            ee_step += 0.01;
-            cnt ++;
-        }
+        waypoints = {start_pose, target.pose};
+        double fraction = this->planner_group_->computeCartesianPath(
+                waypoints,
+                ee_step,
+                trajectory
+                );
 
         RCLCPP_INFO(this->get_logger(), "Cartesian path [%.2f%%] achieved", fraction * 100.0);
 
@@ -258,7 +240,7 @@ private:
         if (rclcpp::ok())
         {
             if (res == MoveItErrorCode::SUCCESS) {
-                result->final_ee_pose = feedback->current_ee_pose; 
+                result->final_ee_pose = planner_group_->getCurrentPose();
                 goal_handle->succeed(result);
             } else {
                 result->final_ee_pose = feedback->current_ee_pose; 
