@@ -121,6 +121,7 @@ private:
         // Planner settings.
         planner_group_->setMaxVelocityScalingFactor(1.0);
         planner_group_->setMaxAccelerationScalingFactor(1.0);
+        planner_group_->setPoseReferenceFrame(pose.header.frame_id);
 
         // Set target pose.
         planner_group_->setPoseTarget(pose);
@@ -157,6 +158,7 @@ private:
         // Planner settings.
         planner_group_->setMaxVelocityScalingFactor(0.1);
         planner_group_->setMaxAccelerationScalingFactor(0.1);
+        planner_group_->setPoseReferenceFrame(target.header.frame_id);
 
         // Compute the cartesian path.
         geometry_msgs::msg::Pose start_pose = this->planner_group_->getCurrentPose().pose;

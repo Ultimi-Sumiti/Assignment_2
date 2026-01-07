@@ -65,6 +65,9 @@ public:
         rclcpp::SubscriptionOptions sub_opts;
         sub_opts.callback_group = cb_group_;
 
+        // Init interface to add collision blocks.
+        psi_ = std::make_shared<moveit::planning_interface::PlanningSceneInterface>();
+
         // Init tags position (wrt frame_id_ frame).
         tag1_pos_ = std::vector<double>{3, 0.0};
         tag10_pos_ = std::vector<double>{3, 0.0};
@@ -73,16 +76,18 @@ public:
         // Add the collision objects.
         add_boxes();
 
-        // Init the current pose (starting pose).
-        current_pose.header.stamp = this->now();
-        current_pose.pose.position.x = 0.4; 
-        current_pose.pose.position.y = 0.1; 
-        current_pose.pose.position.z = 0.5;
-        current_pose.pose.orientation.x = -0.707105;
-        current_pose.pose.orientation.y = -0.000218838;
-        current_pose.pose.orientation.z = 0.0012875;
-        current_pose.pose.orientation.w = 0.707107;
-        current_pose.header.frame_id = frame_id_;
+        // Init starting pose and current pose.
+        starting_pose_.pose.position.x = 0.0006; 
+        starting_pose_.pose.position.y = 0.19145; 
+        starting_pose_.pose.position.z = 1;
+        starting_pose_.pose.orientation.w = 0.707107;
+        starting_pose_.pose.orientation.x = -0.707105;
+        starting_pose_.pose.orientation.y = -0.000218838;
+        starting_pose_.pose.orientation.z = 0.0012875;
+        starting_pose_.header.frame_id = frame_id_; 
+        // Pos: [0.000689429, 0.19145, 1.00106], Ori: [0.707107, -0.707105, -0.000219134, 0.00128763]
+
+        current_pose_ = starting_pose_;
 
         // Define the plan to execute.
         init_plan();
@@ -124,13 +129,15 @@ private:
     rclcpp_action::Client<Plan>::SharedPtr action_client_;
     rclcpp::TimerBase::SharedPtr timer_;
 
-    // Current position.
-    geometry_msgs::msg::PoseStamped current_pose;
+    // Poses.
+    geometry_msgs::msg::PoseStamped current_pose_;
+    geometry_msgs::msg::PoseStamped starting_pose_;
 
     // Relative to tags.
     std::vector<double> tag1_pos_;
     std::vector<double> tag10_pos_;
     std::vector<BoxConfig> boxes_; // Collision objects.
+    std::shared_ptr<moveit::planning_interface::PlanningSceneInterface> psi_;
 
     // Variables used to define the plan.
     std::vector<std::string> gripper_moves_; // "open" or "close".
@@ -205,6 +212,7 @@ private:
         positions_.push_back({tag10_pos_[0] - 0.13, tag10_pos_[1] + 0.009, tag10_pos_[2] +  0.1});
         relative_.push_back(false);
         relative_rotations_.push_back(relQ(0, 0, 0));
+        path_type_.push_back(1);
         gripper_moves_.push_back("none");
 
         // Step 7: move down wrt current position.
@@ -236,18 +244,11 @@ private:
         gripper_moves_.push_back("none");
 
         // Step 11: open gripper and move up wrt current position.
-        positions_.push_back({0, 0, 0.1});
+        positions_.push_back({0, 0, 0.3});
         relative_.push_back(true);
         relative_rotations_.push_back(relQ(0, 0, 0));
         path_type_.push_back(1);
         gripper_moves_.push_back("open");
-
-        // Step 12: return to initial position.
-        //positions_.push_back({current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z});
-        //relative_.push_back(false);
-        //relative_rotations_.push_back(relQ(0, 0, 0));
-        //path_type_.push_back(0);
-        //gripper_moves_.push_back("None");
     }
 
     // Callback used to read gripper status.
@@ -274,8 +275,8 @@ private:
         std::vector<moveit_msgs::msg::CollisionObject> collision_objects = get_collision_object(boxes_, frame_id_);
 
         // Setting all the objcects in the planning scene.
-        moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-        planning_scene_interface.addCollisionObjects(collision_objects);
+        //moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+        psi_->addCollisionObjects(collision_objects);
     }
 
     // Function used to init the tags position (stored in data member).
@@ -329,70 +330,80 @@ private:
         }
 
         // Quit if plan is complete (all steps done).
-        if(step_index_ == positions_.size()){
+        if(step_index_ > positions_.size()){
             rclcpp::shutdown();
             return;
         }
 
         // Define the goal.
         auto goal_msg = Plan::Goal();
-
-        // Perform gripper action, if necessary.
-        if(gripper_moves_[step_index_] == "open"){
-
-            gripper_status_ = false;
-            auto gripper_msg = std_msgs::msg::Float32();
-            gripper_msg.data = to_rad(0.0);
-            grip_pub_->publish(gripper_msg);
-            while (!gripper_status_) /* Wait gripper*/ ;
-
-        } else if(gripper_moves_[step_index_] == "close"){
-
-            gripper_status_ = false;
-            auto gripper_msg = std_msgs::msg::Float32();
-            gripper_msg.data = to_rad(5.0);
-            grip_pub_->publish(gripper_msg);
-            while (!gripper_status_) /* Wait gripper*/ ;
-
-        }
-
-        // Change orientation, if needed.
-        if (relative_rotations_[step_index_] != relQ(0, 0, 0)) {
-            // Current orientation.
-            tf2::Quaternion q_current;
-            tf2::fromMsg(current_pose.pose.orientation, q_current);
-            
-            // Final orientation is: final = current * relative.
-            tf2::Quaternion q_final = q_current * relative_rotations_[step_index_];
-            q_final.normalize();
-
-            current_pose.pose.orientation.x = q_final.x();
-            current_pose.pose.orientation.y = q_final.y();
-            current_pose.pose.orientation.z = q_final.z();
-            current_pose.pose.orientation.w = q_final.w();
-            current_pose.header.frame_id = frame_id_;
-        }
-
-        // Set desired pose.
-        if (relative_[step_index_]) {
-            current_pose.pose.position.x += positions_[step_index_][0];
-            current_pose.pose.position.y += positions_[step_index_][1];
-            current_pose.pose.position.z += positions_[step_index_][2];
-        } else {
-            current_pose.pose.position.x = positions_[step_index_][0];
-            current_pose.pose.position.y = positions_[step_index_][1];
-            current_pose.pose.position.z = positions_[step_index_][2];
-        }
-
-        // Set target pose.
-        goal_msg.target_ee_pose = current_pose;
-
-        // Define the path type.
-        std_msgs::msg::String path_type;
-        path_type.data = "path_cartesian";
-        if (!path_type_[step_index_]) 
+        if (step_index_ == positions_.size()) { // => Last step: return back
+                                                //    to starting position 
+            goal_msg.target_ee_pose = starting_pose_;
+            std_msgs::msg::String path_type;
             path_type.data = "free_cartesian";
-        goal_msg.move_type = path_type;
+            goal_msg.move_type = path_type;
+
+        } else { // All steps except last one.
+
+            // Perform gripper action, if necessary.
+            if(gripper_moves_[step_index_] == "open"){
+
+                gripper_status_ = false;
+                auto gripper_msg = std_msgs::msg::Float32();
+                gripper_msg.data = to_rad(0.0);
+                grip_pub_->publish(gripper_msg);
+                while (!gripper_status_) /* Wait gripper*/ ;
+
+            } else if(gripper_moves_[step_index_] == "close"){
+
+                gripper_status_ = false;
+                auto gripper_msg = std_msgs::msg::Float32();
+                gripper_msg.data = to_rad(5.0);
+                grip_pub_->publish(gripper_msg);
+                while (!gripper_status_) /* Wait gripper*/ ;
+
+            }
+
+            // Change orientation, if needed.
+            if (relative_rotations_[step_index_] != relQ(0, 0, 0)) {
+                // Current orientation.
+                tf2::Quaternion q_current;
+                tf2::fromMsg(current_pose_.pose.orientation, q_current);
+
+                // Final orientation is: final = current * relative.
+                tf2::Quaternion q_final = q_current * relative_rotations_[step_index_];
+                q_final.normalize();
+
+                current_pose_.pose.orientation.x = q_final.x();
+                current_pose_.pose.orientation.y = q_final.y();
+                current_pose_.pose.orientation.z = q_final.z();
+                current_pose_.pose.orientation.w = q_final.w();
+            }
+            current_pose_.header.frame_id = frame_id_;
+
+            // Set desired pose.
+            if (relative_[step_index_]) {
+                current_pose_.pose.position.x += positions_[step_index_][0];
+                current_pose_.pose.position.y += positions_[step_index_][1];
+                current_pose_.pose.position.z += positions_[step_index_][2];
+            } else {
+                current_pose_.pose.position.x = positions_[step_index_][0];
+                current_pose_.pose.position.y = positions_[step_index_][1];
+                current_pose_.pose.position.z = positions_[step_index_][2];
+            }
+
+            // Set target pose.
+            goal_msg.target_ee_pose = current_pose_;
+
+            // Define the path type.
+            std_msgs::msg::String path_type;
+            path_type.data = "path_cartesian";
+            if (!path_type_[step_index_])  {
+                path_type.data = "free_cartesian";
+            }
+            goal_msg.move_type = path_type;
+        }
 
 
         RCLCPP_INFO(this->get_logger(), "Current step: %lu", step_index_);
@@ -428,7 +439,7 @@ private:
                 << feedback->current_ee_pose.pose.orientation.y << ", "
                 << feedback->current_ee_pose.pose.orientation.z <<"]." << std::endl;
 
-            RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
+            //RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
         };
 
         // Result.
@@ -441,26 +452,24 @@ private:
 
             switch (result.code) {
                 case rclcpp_action::ResultCode::SUCCEEDED:
-                    // Update current_pose.
-                    orientation_error(fo);
                     // relative_rotations_[step_index_] *= diff; // TO REMOVE
-                    current_pose = final_pos; // Update pose.
+                    current_pose_ = final_pos; // Update pose.
                     aborted_count_ = 0;
                     send_goal(); /* GO TO NEXT STEP (new goal)! */
                     break;
                 case rclcpp_action::ResultCode::ABORTED:
-                    RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
-                    if(aborted_count_ < 3){
-                        step_index_--;
-                        aborted_count_ ++;
-                    }else{
-                        aborted_count_ = 0;
+                    RCLCPP_ERROR(this->get_logger(), "Goal was aborted...");
+                    if (aborted_count_ < 3) {
+                        RCLCPP_INFO(this->get_logger(), 
+                                "Sending again same goal... [%lu]", aborted_count_);
+                        step_index_--; // Redo the same step.
+                        aborted_count_++;
+                        send_goal();
+                    } else { // Quit.
+                        rclcpp::shutdown();
+                        return;
                     }
-                    std::cout<<"Abort count: "<<aborted_count_<<std::endl;
-                    send_goal();
-
-                    //rclcpp::shutdown();
-                    return;
+                    break;
                 case rclcpp_action::ResultCode::CANCELED:
                     RCLCPP_WARN(this->get_logger(), "Goal was canceled");
                     rclcpp::shutdown();
@@ -478,7 +487,7 @@ private:
 
     void orientation_error(tf2::Quaternion final) {
         tf2::Quaternion current;
-        tf2::fromMsg(current_pose.pose.orientation, current);
+        tf2::fromMsg(current_pose_.pose.orientation, current);
 
         current.normalize();
         final.normalize();
