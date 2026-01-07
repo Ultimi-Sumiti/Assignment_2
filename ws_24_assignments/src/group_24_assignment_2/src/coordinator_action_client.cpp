@@ -199,7 +199,7 @@ private:
         gripper_moves_.push_back("open");
 
         // Step 6: approach tag10 from above.
-        positions_.push_back({tag10_pos_[0] - 0.12, tag10_pos_[1] + 0.009, tag10_pos_[2] +  0.1});
+        positions_.push_back({tag10_pos_[0] - 0.13, tag10_pos_[1] + 0.009, tag10_pos_[2] +  0.1});
         relative_.push_back(false);
         relative_rotations_.push_back(relQ(0, 0, 0));
         gripper_moves_.push_back("none");
@@ -238,6 +238,13 @@ private:
         relative_rotations_.push_back(relQ(0, 0, 0));
         path_type_.push_back(1);
         gripper_moves_.push_back("open");
+
+        // Step 12: return to initial position.
+        //positions_.push_back({current_pose.pose.position.x, current_pose.pose.position.y, current_pose.pose.position.z});
+        //relative_.push_back(false);
+        //relative_rotations_.push_back(relQ(0, 0, 0));
+        //path_type_.push_back(0);
+        //gripper_moves_.push_back("None");
     }
 
     // Callback used to read gripper status.
@@ -379,8 +386,9 @@ private:
 
         // Define the path type.
         std_msgs::msg::String path_type;
-        if(path_type_[step_index_]) path_type.data = "path_cartesian";
-        else path_type.data = "free_cartesian";
+        path_type.data = "path_cartesian";
+        if (!path_type_[step_index_]) 
+            path_type.data = "free_cartesian";
         goal_msg.move_type = path_type;
 
 
@@ -408,14 +416,14 @@ private:
         {
             std::stringstream ss;
             ss << "Received current pose: ";
-            ss << "Pos: (x: " 
-                << feedback->current_ee_pose.pose.position.x << ", y: "
-                << feedback->current_ee_pose.pose.position.y << ", z: "
-                << feedback->current_ee_pose.pose.position.z << ", x orientation: "
-                << feedback->current_ee_pose.pose.orientation.x << ", y orientation: "
-                << feedback->current_ee_pose.pose.orientation.y << ", z orientation: "
-                << feedback->current_ee_pose.pose.orientation.z << ", w orientation: "
-                << feedback->current_ee_pose.pose.orientation.w <<") "<< std::endl;
+            ss << "Pos: [" 
+                << feedback->current_ee_pose.pose.position.x << ", "
+                << feedback->current_ee_pose.pose.position.y << ", "
+                << feedback->current_ee_pose.pose.position.z << "], Ori: ["
+                << feedback->current_ee_pose.pose.orientation.w << ", "
+                << feedback->current_ee_pose.pose.orientation.x << ", "
+                << feedback->current_ee_pose.pose.orientation.y << ", "
+                << feedback->current_ee_pose.pose.orientation.z <<"]." << std::endl;
 
             RCLCPP_INFO(this->get_logger(), "%s", ss.str().c_str());
         };
@@ -423,10 +431,16 @@ private:
         // Result.
         send_goal_options.result_callback = [this](const GoalHandlePlan::WrappedResult & result)
         {
+            // Final postiion.
             auto final_pos = result.result->final_ee_pose;
+            tf2::Quaternion fo; // Final orientation.
+            tf2::fromMsg(final_pos.pose.orientation, fo);
+
             switch (result.code) {
                 case rclcpp_action::ResultCode::SUCCEEDED:
                     // Update current_pose.
+                    orientation_error(fo);
+                    // relative_rotations_[step_index_] *= diff; // TO REMOVE
                     current_pose = final_pos; // Update pose.
                     send_goal(); /* GO TO NEXT STEP (new goal)! */
                     break;
@@ -450,7 +464,21 @@ private:
         // Send the action goal to the action server.
         this->action_client_->async_send_goal(goal_msg, send_goal_options);
     }
-}; 
+
+    void orientation_error(tf2::Quaternion final) {
+        tf2::Quaternion current;
+        tf2::fromMsg(current_pose.pose.orientation, current);
+
+        current.normalize();
+        final.normalize();
+
+        tf2::Quaternion diff = current.inverse() * final;
+        diff.normalize();
+
+        double error = 2 * std::acos(std::abs(current.dot(final)));
+        RCLCPP_INFO(this->get_logger(), "Orientation error: %f", error);
+    }
+};
 
 
 int main(int argc, char ** argv)
