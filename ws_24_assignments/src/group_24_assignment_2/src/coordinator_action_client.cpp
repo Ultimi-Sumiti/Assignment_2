@@ -142,6 +142,9 @@ private:
     // Current step of the plan.
     size_t step_index_ = 0;
 
+    // This is the amount of abort signal received in same goal.
+    size_t aborted_count_ = 0;
+
     // Publiser for the communication with the gripper node.
     rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr grip_pub_;
     // Subscriber to read gripper status.
@@ -199,7 +202,7 @@ private:
         gripper_moves_.push_back("open");
 
         // Step 6: approach tag10 from above.
-        positions_.push_back({tag10_pos_[0] - 0.12, tag10_pos_[1] + 0.009, tag10_pos_[2] +  0.1});
+        positions_.push_back({tag10_pos_[0] - 0.13, tag10_pos_[1] + 0.009, tag10_pos_[2] +  0.1});
         relative_.push_back(false);
         relative_rotations_.push_back(relQ(0, 0, 0));
         gripper_moves_.push_back("none");
@@ -428,13 +431,21 @@ private:
                 case rclcpp_action::ResultCode::SUCCEEDED:
                     // Update current_pose.
                     current_pose = final_pos; // Update pose.
+                    aborted_count_ = 0;
                     send_goal(); /* GO TO NEXT STEP (new goal)! */
                     break;
                 case rclcpp_action::ResultCode::ABORTED:
                     RCLCPP_ERROR(this->get_logger(), "Goal was aborted");
-                    //action--;
-                    //send_goal();
-                    rclcpp::shutdown();
+                    if(aborted_count_ < 3){
+                        step_index_--;
+                        aborted_count_ ++;
+                    }else{
+                        aborted_count_ = 0;
+                    }
+                    std::cout<<"Abort count: "<<aborted_count_<<std::endl;
+                    send_goal();
+
+                    //rclcpp::shutdown();
                     return;
                 case rclcpp_action::ResultCode::CANCELED:
                     RCLCPP_WARN(this->get_logger(), "Goal was canceled");
