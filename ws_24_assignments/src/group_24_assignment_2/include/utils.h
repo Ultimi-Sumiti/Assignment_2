@@ -28,14 +28,28 @@
 
 using namespace std::chrono_literals;
 
+// This struct contains all the elements associated with position and shape of a box.
 struct BoxConfig {
     std::string id;
     double width, depth, height;
     double x_offset, y_offset, z_offset;
 };
+ 
+/*
+This fuction returns the collision objects associated with the given objects.
 
-//void print_joint(const std::vector<double>& current_joint_values, const std::vector<std::string>& joint_names);
+Args:
+    -boxes_to_add: vector of BoxConfig to consider in the collision objects returned vector.
+    -FRAME_ID: frame we need to place the collision object.
+*/
 std::vector<moveit_msgs::msg::CollisionObject> get_collision_object(std::vector<BoxConfig>& boxes_to_add, const std::string FRAME_ID);
 
-// NUOVO METODO: Ritorna true se trova le trasformate, e riempie i vettori passati per reference
+/*
+This function return treu when the tag position are retrived correctly.
+
+Args:
+    -tag1_xyz: the tag1 position.
+    -tag10_xyz: the tag10 position.
+    -tf_buffer_: the ros tf topic buffer.
+*/
 bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10_xyz, const tf2_ros::Buffer& tf_buffer_);
