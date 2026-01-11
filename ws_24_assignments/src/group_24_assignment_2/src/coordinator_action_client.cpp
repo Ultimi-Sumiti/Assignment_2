@@ -119,12 +119,31 @@ private:
     std::vector<utils::BoxConfig> boxes_; // Collision objects.
     std::shared_ptr<moveit::planning_interface::PlanningSceneInterface> psi_;
 
-    // Variables used to define the plan.
-    std::vector<std::string> gripper_moves_; // "open" or "close".
-    std::vector<std::array<double, 3>> positions_;
-    std::vector<bool> relative_; // true => relative, false => absolute.
-    std::vector<tf2::Quaternion> relative_rotations_; // wrt current orientation.
-    std::vector<bool> path_type_; // Cartesian or not.
+    // Struct that contains all info to perform a single step.
+    struct PlanStep {
+        std::array<double, 3> pos_;
+        bool is_relative_;
+        tf2::Quaternion rel_rot_; // w.r.t current orientation.
+        bool is_cartesian_;       // true=>linear cartesian, false=>PTP (free).
+        std::string gripper_move_; 
+
+        PlanStep(std::array<double, 3> pos, 
+                bool is_relative, 
+                tf2::Quaternion rel_rot, 
+                bool is_cartesian,   
+                std::string gripper_move
+        ) 
+            : pos_(pos), 
+            is_relative_(is_relative), 
+            rel_rot_(rel_rot), 
+            is_cartesian_(is_cartesian), 
+            gripper_move_(gripper_move) 
+        {}
+
+    };
+
+    // The entire plan.
+    std::vector<PlanStep> plan_;
 
     // Current step of the plan.
     size_t step_index_ = 0;
@@ -147,90 +166,113 @@ private:
     // --- MEMBER FUNCTIONS ---
     // Function used to init the plan, step by step.
     void init_plan() {
-        
         // Step 0: approach tag1, stay a little bit above it.
-        positions_.push_back({tag1_pos_[0] + 0.03, tag1_pos_[1] + 0.16, tag1_pos_[2] + 0.04});
-        relative_.push_back(false);
-        relative_rotations_.push_back(utils::RPY2q(0, M_PI, 0));
-        path_type_.push_back(0);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{tag1_pos_[0] + 0.03, tag1_pos_[1] + 0.16, tag1_pos_[2] + 0.04}, 
+            false, 
+            utils::RPY2q(0, M_PI, 0), 
+            false, 
+            "none"
+        );
 
         // Step 1: open gripper and move down wrt current position.
-        positions_.push_back({0, 0, -0.08});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("open");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, -0.08}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "open"
+        );
 
         // Step 2: close gripper and move up wrt current position.
-        positions_.push_back({0, 0, 0.25});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("close");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, 0.25}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "close"
+        );
 
         // Step 3: approach dropping point of tag1 (near tag10).
-        positions_.push_back({tag10_pos_[0] - 0.25, tag10_pos_[1] + 0.12, tag10_pos_[2] + 0.1});
-        relative_.push_back(false);
-        relative_rotations_.push_back(utils::RPY2q(0, 3*M_PI/2, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{tag10_pos_[0] - 0.25, tag10_pos_[1] + 0.12, tag10_pos_[2] + 0.1}, 
+            false, 
+            utils::RPY2q(0, 3*M_PI/2, 0), 
+            true, 
+            "none"
+        );
 
         // Step 4: move down wrt current position.
-        positions_.push_back({0, 0, -0.1});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, -0.1}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "none"
+        );
 
         // Step 5: open gripper and move up wrt current position.
-        positions_.push_back({0, 0, 0.2});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("open");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, 0.2}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "open"
+        );
 
         // Step 6: approach tag10 from above.
-        positions_.push_back({tag10_pos_[0] - 0.13, tag10_pos_[1] + 0.009, tag10_pos_[2] +  0.1});
-        relative_.push_back(false);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{tag10_pos_[0] - 0.13, tag10_pos_[1] + 0.009, tag10_pos_[2] + 0.1}, 
+            false, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "none"
+        );
 
         // Step 7: move down wrt current position.
-        positions_.push_back({0, 0, -0.15});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, -0.15}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "none"
+        );
 
         // Step 8: close gripper and move up wrt current position.
-        positions_.push_back({0, 0, 0.1});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("close");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, 0.1}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "close"
+        );
 
         // Step 9: move towards the other table (dropping point of).
-        positions_.push_back({tag1_pos_[0] + 0.03, tag1_pos_[1] + 0.16, tag1_pos_[2] + 0.04});
-        relative_.push_back(false);
-        relative_rotations_.push_back(utils::RPY2q(0, -3*M_PI/2, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{tag1_pos_[0] + 0.03, tag1_pos_[1] + 0.16, tag1_pos_[2] + 0.04}, 
+            false, 
+            utils::RPY2q(0, -3*M_PI/2, 0), 
+            true, 
+            "none"
+        );
 
         // Step 10: move down wrt current position.
-        positions_.push_back({0, 0, -0.1});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("none");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, -0.1}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "none"
+        );
 
         // Step 11: open gripper and move up wrt current position.
-        positions_.push_back({0, 0, 0.3});
-        relative_.push_back(true);
-        relative_rotations_.push_back(utils::RPY2q(0, 0, 0));
-        path_type_.push_back(1);
-        gripper_moves_.push_back("open");
+        plan_.emplace_back(
+            std::array<double, 3>{0.0, 0.0, 0.3}, 
+            true, 
+            utils::RPY2q(0, 0, 0), 
+            true, 
+            "open"
+        );
     }
 
     // Callback used to read gripper status.
@@ -312,14 +354,14 @@ private:
         }
 
         // Quit if plan is complete (all steps done).
-        if(step_index_ > positions_.size()){
+        if(step_index_ > plan_.size()){
             rclcpp::shutdown();
             return;
         }
 
         // Define the goal.
         auto goal_msg = Plan::Goal();
-        if (step_index_ == positions_.size()) { // => Last step: return back
+        if (step_index_ == plan_.size()) { // => Last step: return back
                                                 //    to starting position 
             goal_msg.target_ee_pose = starting_pose_;
             std_msgs::msg::String path_type;
@@ -330,7 +372,7 @@ private:
         } else { // All steps except last one.
 
             // Perform gripper action, if necessary.
-            if(gripper_moves_[step_index_] == "open"){
+            if(plan_[step_index_].gripper_move_ == "open"){
 
                 gripper_status_ = false;
                 auto gripper_msg = std_msgs::msg::Float32();
@@ -338,7 +380,7 @@ private:
                 grip_pub_->publish(gripper_msg);
                 while (!gripper_status_) /* Wait gripper*/ ;
 
-            } else if(gripper_moves_[step_index_] == "close"){
+            } else if(plan_[step_index_].gripper_move_ == "close"){
 
                 gripper_status_ = false;
                 auto gripper_msg = std_msgs::msg::Float32();
@@ -349,13 +391,13 @@ private:
             }
 
             // Change orientation, if needed.
-            if (relative_rotations_[step_index_] != utils::RPY2q(0, 0, 0)) {
+            if (plan_[step_index_].rel_rot_ != utils::RPY2q(0, 0, 0)) {
                 // Current orientation.
                 tf2::Quaternion q_current;
                 tf2::fromMsg(current_pose_.pose.orientation, q_current);
 
                 // Final orientation is: final = current * relative.
-                tf2::Quaternion q_final = q_current * relative_rotations_[step_index_];
+                tf2::Quaternion q_final = q_current * plan_[step_index_].rel_rot_;
                 q_final.normalize();
 
                 current_pose_.pose.orientation.x = q_final.x();
@@ -366,14 +408,14 @@ private:
             current_pose_.header.frame_id = frame_id_;
 
             // Set desired pose.
-            if (relative_[step_index_]) {
-                current_pose_.pose.position.x += positions_[step_index_][0];
-                current_pose_.pose.position.y += positions_[step_index_][1];
-                current_pose_.pose.position.z += positions_[step_index_][2];
+            if (plan_[step_index_].is_relative_) {
+                current_pose_.pose.position.x += plan_[step_index_].pos_[0];
+                current_pose_.pose.position.y += plan_[step_index_].pos_[1];
+                current_pose_.pose.position.z += plan_[step_index_].pos_[2];
             } else {
-                current_pose_.pose.position.x = positions_[step_index_][0];
-                current_pose_.pose.position.y = positions_[step_index_][1];
-                current_pose_.pose.position.z = positions_[step_index_][2];
+                current_pose_.pose.position.x = plan_[step_index_].pos_[0];
+                current_pose_.pose.position.y = plan_[step_index_].pos_[1];
+                current_pose_.pose.position.z = plan_[step_index_].pos_[2];
             }
 
             // Set target pose.
@@ -382,12 +424,11 @@ private:
             // Define the path type.
             std_msgs::msg::String path_type;
             path_type.data = "path_cartesian";
-            if (!path_type_[step_index_])  {
+            if (!plan_[step_index_].is_cartesian_)  {
                 path_type.data = "free_cartesian";
             }
             goal_msg.move_type = path_type;
         }
-
 
         RCLCPP_INFO(this->get_logger(), "Current step: %lu", step_index_);
         step_index_ += 1;
@@ -453,9 +494,9 @@ private:
                         step_index_--; // Redo the same step.
                         aborted_count_++;
                         send_goal();
-                    } else { // Quit.
-                        rclcpp::shutdown();
-                        return;
+                    } else {
+                        aborted_count_ = 0;
+                        send_goal(); /* GO TO NEXT STEP (new goal)! */
                     }
                     break;
                 case rclcpp_action::ResultCode::CANCELED:

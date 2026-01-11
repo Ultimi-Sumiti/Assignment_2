@@ -116,7 +116,7 @@ private:
     }
 
     // Plan and execute function in free cartesian space (no costraints in the motion of the robotic arm).
-    MoveItErrorCode plan_execute(const geometry_msgs::msg::PoseStamped& pose)
+    MoveItErrorCode free_cartesian(const geometry_msgs::msg::PoseStamped& pose)
     {
         // Planner settings.
         planner_group_->setMaxVelocityScalingFactor(1.0);
@@ -153,7 +153,7 @@ private:
     }
 
     // Plan and execute function to move the robotic arm using linear cartesian path to mantain in the same position the end effector. 
-    MoveItErrorCode plan_execute_cartesian(const geometry_msgs::msg::PoseStamped& target)
+    MoveItErrorCode path_cartesian(const geometry_msgs::msg::PoseStamped& target)
     {
         // Planner settings.
         planner_group_->setMaxVelocityScalingFactor(0.1);
@@ -216,9 +216,9 @@ private:
         // Select between free-motion planning or linear Cartesian path execution based on the request mode (select one or the other function).
         MoveItErrorCode res = MoveItErrorCode::ABORT;
         if (goal->move_type.data == "path_cartesian")
-            res = plan_execute_cartesian(goal->target_ee_pose);
+            res = path_cartesian(goal->target_ee_pose);
         else if (goal->move_type.data == "free_cartesian")
-            res = plan_execute(goal->target_ee_pose);
+            res = free_cartesian(goal->target_ee_pose);
 
         // Stop send_feedback callback.
         timer->cancel();
