@@ -1,13 +1,35 @@
 #include "../include/utils.h"
 
-/*
-This function return treu when the tag position are retrived correctly.
+namespace utils {
+double deg2rad(double deg) { return deg * M_PI / 180.0; }
 
-Args:
-    -tag1_xyz: the tag1 position.
-    -tag10_xyz: the tag10 position.
-    -tf_buffer_: the ros tf topic buffer.
-*/
+tf2::Quaternion RPY2q(double r, double p, double y) {
+    tf2::Quaternion q; 
+    q.setRPY(r, p, y); 
+    return q;
+}
+
+double orientation_error(tf2::Quaternion q1, tf2::Quaternion q2) {
+    q1.normalize();
+    q2.normalize();
+    double error = 2 * std::acos(std::abs(q1.dot(q2)));
+    return error;
+}
+
+double position_error(const geometry_msgs::msg::PoseStamped& x1, const geometry_msgs::msg::PoseStamped& x2) {
+    const auto& pos1 = x1.pose.position;
+    const auto& pos2 = x2.pose.position;
+
+    double dx, dy, dz;
+    dx = pos1.x - pos2.x;
+    dy = pos1.x - pos2.x;
+    dz = pos1.z - pos2.z;
+
+    double dist = std::sqrt(std::pow(dx, 2) + std::pow(dy, 2) + std::pow(dz, 2));
+
+    return dist;
+}
+
 bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10_xyz, const tf2_ros::Buffer& tf_buffer_) {
     // Defining the variables for the transform message of the 2 tags frame origin position.
     geometry_msgs::msg::TransformStamped T_tag1_base;
@@ -23,17 +45,17 @@ bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10
         T_tag1_base = tf_buffer_.lookupTransform(
             base_frame_, tag1_frame_, tf2::TimePointZero, std::chrono::milliseconds(100)); // Small Timeout to void blocking.
         
-        T_tag10_base = tf_buffer_.lookupTransform(
-            base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
+        //T_tag10_base = tf_buffer_.lookupTransform(
+        //    base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
 
         // Storing the results in x y z, in the given variables.
         tag1_xyz[0] = T_tag1_base.transform.translation.x;
         tag1_xyz[1] = T_tag1_base.transform.translation.y;
         tag1_xyz[2] = T_tag1_base.transform.translation.z;
 
-        tag10_xyz[0] = T_tag10_base.transform.translation.x;
-        tag10_xyz[1] = T_tag10_base.transform.translation.y;
-        tag10_xyz[2] = T_tag10_base.transform.translation.z;
+        //tag10_xyz[0] = T_tag10_base.transform.translation.x;
+        //tag10_xyz[1] = T_tag10_base.transform.translation.y;
+        //tag10_xyz[2] = T_tag10_base.transform.translation.z;
         
         return true; // If succeded.
 
@@ -43,14 +65,6 @@ bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10
     }
 }
 
- 
-/*
-This fuction returns the collision objects associated with the given objects.
-
-Args:
-    -boxes_to_add: vector of BoxConfig to consider in the collision objects returned vector.
-    -FRAME_ID: frame we need to place the collision object.
-*/
 std::vector<moveit_msgs::msg::CollisionObject> get_collision_object(std::vector<BoxConfig>& boxes_to_add, const std::string FRAME_ID){
 
     // Return object definition.
@@ -85,3 +99,5 @@ std::vector<moveit_msgs::msg::CollisionObject> get_collision_object(std::vector<
     }
     return collision_objects;
 }
+
+} // end namespace

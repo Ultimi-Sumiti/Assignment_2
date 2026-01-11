@@ -1,32 +1,26 @@
-#include <rclcpp/rclcpp.hpp>
-#include <rclcpp/node_options.hpp>
-#include <memory>
-#include <thread> 
-#include <chrono>
-#include <vector>
-#include <string.h>
-// MoveIt Headers
-#include <moveit/move_group_interface/move_group_interface.hpp>
-#include <moveit/robot_state/robot_state.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
+#ifndef UTILS_H
+#define UTILS_H
+
+#include <tf2/LinearMath/Quaternion.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <moveit/planning_scene_interface/planning_scene_interface.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <string>
 
-#include <cmath>
+namespace utils {
 
-// Transformation libraries.
-#include "tf2_ros/buffer.h"
-#include "tf2_ros/transform_listener.h"
+// Transform deg -> rad.
+double deg2rad(double deg);
 
-// Messages libraries.
-#include "std_msgs/msg/string.hpp"
+// Given RPY angles, return the associated quaternion.
+tf2::Quaternion RPY2q (double r, double p, double y);
 
-// Language libraries.
-#include <array>
+// Return the geodesic distance between q1 and q2.
+double orientation_error(tf2::Quaternion q1, tf2::Quaternion q2);
 
-
-
-using namespace std::chrono_literals;
+// Return the euclideian distance between x1 and x2.
+double position_error(const geometry_msgs::msg::PoseStamped& x1, const geometry_msgs::msg::PoseStamped& x2);
 
 // This struct contains all the elements associated with position and shape of a box.
 struct BoxConfig {
@@ -53,3 +47,7 @@ Args:
     -tf_buffer_: the ros tf topic buffer.
 */
 bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10_xyz, const tf2_ros::Buffer& tf_buffer_);
+
+} // end namespace
+
+#endif
