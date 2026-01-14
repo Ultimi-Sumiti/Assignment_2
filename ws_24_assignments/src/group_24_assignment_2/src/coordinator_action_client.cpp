@@ -46,7 +46,7 @@ public:
 
         // Init tags position (wrt frame_id_ frame).
         tag1_pos_ = std::vector<double>{3, 0.0};
-        tag10_pos_ = std::vector<double>{0.57, -0.01, 0.44};
+        tag10_pos_ = std::vector<double>{3, 0.0};
         init_tags_position();
 
         // Add the collision objects.

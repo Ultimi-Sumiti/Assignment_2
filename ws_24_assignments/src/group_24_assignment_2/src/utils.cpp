@@ -45,17 +45,17 @@ bool get_tags_position(std::vector<double>& tag1_xyz, std::vector<double>& tag10
         T_tag1_base = tf_buffer_.lookupTransform(
             base_frame_, tag1_frame_, tf2::TimePointZero, std::chrono::milliseconds(100)); // Small Timeout to void blocking.
         
-        //T_tag10_base = tf_buffer_.lookupTransform(
-        //    base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
+        T_tag10_base = tf_buffer_.lookupTransform(
+            base_frame_, tag10_frame_, tf2::TimePointZero, std::chrono::milliseconds(100));
 
         // Storing the results in x y z, in the given variables.
         tag1_xyz[0] = T_tag1_base.transform.translation.x;
         tag1_xyz[1] = T_tag1_base.transform.translation.y;
         tag1_xyz[2] = T_tag1_base.transform.translation.z;
 
-        //tag10_xyz[0] = T_tag10_base.transform.translation.x;
-        //tag10_xyz[1] = T_tag10_base.transform.translation.y;
-        //tag10_xyz[2] = T_tag10_base.transform.translation.z;
+        tag10_xyz[0] = T_tag10_base.transform.translation.x;
+        tag10_xyz[1] = T_tag10_base.transform.translation.y;
+        tag10_xyz[2] = T_tag10_base.transform.translation.z;
         
         return true; // If succeded.
 
