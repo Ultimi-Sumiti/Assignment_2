@@ -33,7 +33,6 @@ The robot spawns in a simulation environment close to two tables and an external
 <img width="702" height="578" alt="UR5" src="https://github.com/user-attachments/assets/228daaec-1f29-44d7-a01c-f149bd794621" />
 
 
-
 ## Pipeline Components:
 
 The final pipeline, developed as a modular ROS 2 package, includes the following components/nodes:
@@ -57,7 +56,7 @@ The operational pipeline is triggered effectively once the `coordinator action c
 * 
 ## Results:
 
-https://github.com/user-attachments/assets/f7f9fb9a-dc00-4dba-be2e-c134ab6713b4
+https://github.com/user-attachments/assets/61e2a5f0-c351-44c9-9161-9c2867fb0b32
 
 ## How to launch
 
@@ -78,8 +77,51 @@ cd ws_24_assignments
 #Build the package:
 colcon build
 
-#Launch setup.bash: 
+#Source setup.bash: 
 source install/setup.bash
+```
 
-#Launch the launch file:
-ros2 launch group_24_assignment_2 launch.py
+### 2. Launch
+
+There are two ways to run the entire pipeline. The first one is to open 5 terminals and then running
+in the following order:
+
+```bash
+#Terminal 1: run simulation env
+ros2 launch ir_launch assignment_2.launch.py
+
+#Terminal 2: run AprilTagNode
+ros2 launch src/group_24_assignment_2/launch/launch_AprilTag_node.yml
+
+#Terminal 3: run Gripper
+ros2 launch src/group_24_assignment_2/launch/gripper.launch.py
+
+#Terminal 4: run PlannerActionServer
+ros2 launch src/group_24_assignment_2/launch/planner_action_server.launch.py
+
+#Terminal 5: run CoordinatorActionClient
+ros2 run group_24_assignment_2 coordinator_action_client
+```
+
+If you use this method, when you launch `PlannerActionServer`, you will see some errors but you can ignore them.
+Everything will work fine.
+
+The second method is to use the global launcher:
+
+```bash
+ros2 launch src/group_24_assignment_2/launch/global_launcher.launch.py
+```
+
+Note however that, depending on your machine, this could fail. If this is your case, then you should try
+to increase the delay of `CoordinatorActionClient` (default to 10 seconds).
+To do that you need edit the global launch file like so:
+
+```python
+    delayed_coordinator = TimerAction(
+        period=10.0, # <-- Increase this
+        actions=[
+            LogInfo(msg="10 seconds passed. Launching Coordinator..."),
+            coordinator_node
+        ]
+    )
+```
