@@ -1,8 +1,7 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
-from launch.actions import IncludeLaunchDescription, RegisterEventHandler, LogInfo
-from launch.event_handlers import OnProcessStart # <--- Added this import
+from launch.actions import IncludeLaunchDescription, TimerAction, LogInfo
 from launch.launch_description_sources import PythonLaunchDescriptionSource, FrontendLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
@@ -37,6 +36,7 @@ def generate_launch_description():
 
     moveit_config_pkg = "ir_movit_config"
     moveit_config = MoveItConfigsBuilder("ir_gripper", package_name=moveit_config_pkg).to_moveit_configs()
+    
     planner_node = Node(
         package=pkg_name,
         executable="planner_action_server",
@@ -68,21 +68,20 @@ def generate_launch_description():
         emulate_tty=True
     )
 
-    start_coordinator_after_planner = RegisterEventHandler(
-        event_handler=OnProcessStart(
-            target_action=planner_node,
-            on_start=[
-                LogInfo(msg='Planner started, now launching Coordinator...'),
-                coordinator_node
-            ]
-        )
+    delayed_coordinator = TimerAction(
+        period=10.0,
+        actions=[
+            LogInfo(msg="10 seconds passed. Launching Coordinator..."),
+            coordinator_node
+        ]
     )
 
     ld = LaunchDescription()
+    
     ld.add_action(assignment2_launch)
     ld.add_action(apriltag_launch)
-    ld.add_action(gripper_node)
     ld.add_action(planner_node)
-    ld.add_action(start_coordinator_after_planner)
+    ld.add_action(gripper_node)
+    ld.add_action(delayed_coordinator)
 
     return ld
