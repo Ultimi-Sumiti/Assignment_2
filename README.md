@@ -54,8 +54,10 @@ The operational pipeline is triggered effectively once the `coordinator action c
 * **Sequence Management**: The coordinator determines the step-by-step pipeline (Approach Cube 1 -> Open Gripper -> Descend -> Close Gripper -> Lift -> Move to Table 2 -> ...).
 * **Actuation gripper Calls**: It commands the `gripper` to open or close at precise moments via ROS 2 topics.
 * **Motion planning Requests**: It sends `Plan` goals to the `planner` to execute specific trajectories (e.g., requesting a "free_cartesian" path to approach the table or a "path_cartesian" for the vertical grasp) based on the target poses retrieved from the perception system.
+* 
 ## Results:
 
+https://github.com/user-attachments/assets/f7f9fb9a-dc00-4dba-be2e-c134ab6713b4
 
 ## How to launch
 
