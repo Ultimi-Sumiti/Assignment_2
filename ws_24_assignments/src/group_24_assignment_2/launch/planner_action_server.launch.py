@@ -13,29 +13,10 @@ import yaml
 
 def generate_launch_description():
     pkg_name = 'group_24_assignment_2'
-    
-    assignment2_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-            PathJoinSubstitution([
-                FindPackageShare('ir_launch'),
-                'launch',
-                'assignment_2.launch.py'
-            ])
-        ])
-    )
-
-    apriltag_launch = IncludeLaunchDescription(
-        FrontendLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare(pkg_name),
-                'launch',
-                'launch_AprilTag_node.yml'
-            ])
-        )
-    )
-
     moveit_config_pkg = "ir_movit_config"
+
     moveit_config = MoveItConfigsBuilder("ir_gripper", package_name=moveit_config_pkg).to_moveit_configs()
+
     planner_node = Node(
         package=pkg_name,
         executable="planner_action_server",
@@ -48,23 +29,7 @@ def generate_launch_description():
         emulate_tty=True
     )
 
-    gripper_node = Node(
-        package="group_24_assignment_2",
-        executable="gripper",
-        name="gripper",
-        parameters=[
-            {"use_sim_time": True},
-            moveit_config.to_dict(),
-        ],
-        output="screen",
-    )
-
-    # Create launch descriptor.
     ld = LaunchDescription()
-    
-    #ld.add_action(assignment2_launch)
-    #ld.add_action(apriltag_launch)
     ld.add_action(planner_node)
-    #ld.add_action(gripper_node)
 
     return ld

@@ -126,18 +126,21 @@ private:
         tf2::Quaternion rel_rot_; // w.r.t current orientation.
         bool is_cartesian_;       // true=>linear cartesian, false=>PTP (free).
         std::string gripper_move_; 
+        std::string description_;
 
         PlanStep(std::array<double, 3> pos, 
                 bool is_relative, 
                 tf2::Quaternion rel_rot, 
                 bool is_cartesian,   
-                std::string gripper_move
+                std::string gripper_move,
+                std::string description
         ) 
             : pos_(pos), 
             is_relative_(is_relative), 
             rel_rot_(rel_rot), 
             is_cartesian_(is_cartesian), 
-            gripper_move_(gripper_move) 
+            gripper_move_(gripper_move),
+            description_(description)
         {}
 
     };
@@ -172,7 +175,8 @@ private:
             false, 
             utils::RPY2q(0, M_PI, 0), 
             false, 
-            "none"
+            "none",
+            "Approach tag1, stay a little bit above it"
         );
 
         // Step 1: open gripper and move down wrt current position.
@@ -181,7 +185,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "open"
+            "open",
+            "Open gripper and move down wrt current position"
         );
 
         // Step 2: close gripper and move up wrt current position.
@@ -190,7 +195,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "close"
+            "close",
+            "Close gripper and move up wrt current position"
         );
 
         // Step 3: approach dropping point of tag1 (near tag10).
@@ -199,7 +205,8 @@ private:
             false, 
             utils::RPY2q(0, 3*M_PI/2, 0), 
             true, 
-            "none"
+            "none",
+            "Approach dropping point of tag1 (near tag10)"
         );
 
         // Step 4: move down wrt current position.
@@ -208,7 +215,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "none"
+            "none",
+            "Move down wrt current position"
         );
 
         // Step 5: open gripper and move up wrt current position.
@@ -217,7 +225,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "open"
+            "open",
+            "Open gripper and move up wrt current position"
         );
 
         // Step 6: approach tag10 from above.
@@ -226,7 +235,8 @@ private:
             false, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "none"
+            "none",
+            "Approach tag10 from above"
         );
 
         // Step 7: move down wrt current position.
@@ -235,7 +245,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "none"
+            "none",
+            "Move down wrt current position"
         );
 
         // Step 8: close gripper and move up wrt current position.
@@ -244,7 +255,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "close"
+            "close",
+            "Close gripper and move up wrt current position"
         );
 
         // Step 9: move towards the other table (dropping point of).
@@ -253,7 +265,8 @@ private:
             false, 
             utils::RPY2q(0, -3*M_PI/2, 0), 
             true, 
-            "none"
+            "none",
+            "Move towards the other table (dropping point of)"
         );
 
         // Step 10: move down wrt current position.
@@ -262,7 +275,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "none"
+            "none",
+            "Move down wrt current position"
         );
 
         // Step 11: open gripper and move up wrt current position.
@@ -271,7 +285,8 @@ private:
             true, 
             utils::RPY2q(0, 0, 0), 
             true, 
-            "open"
+            "open",
+            "Open gripper and move up wrt current position"
         );
     }
 
@@ -368,6 +383,7 @@ private:
             path_type.data = "free_cartesian";
             goal_msg.move_type = path_type;
             current_pose_ = starting_pose_;
+            RCLCPP_INFO(this->get_logger(), "Last step: Returning back to starting pose");
 
         } else { // All steps except last one.
 
@@ -428,9 +444,11 @@ private:
                 path_type.data = "free_cartesian";
             }
             goal_msg.move_type = path_type;
+
+            // Plot info.
+            RCLCPP_INFO(this->get_logger(), "Current step: %lu -> %s", step_index_, plan_[step_index_].description_.c_str());
         }
 
-        RCLCPP_INFO(this->get_logger(), "Current step: %lu", step_index_);
         step_index_ += 1;
 
         // Define goal options.

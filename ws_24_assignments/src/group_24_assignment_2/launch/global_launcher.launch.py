@@ -1,7 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
-from launch.actions import IncludeLaunchDescription, TimerAction, RegisterEventHandler, EmitEvent, LogInfo
+from launch.actions import IncludeLaunchDescription, RegisterEventHandler, LogInfo
+from launch.event_handlers import OnProcessStart # <--- Added this import
 from launch.launch_description_sources import PythonLaunchDescriptionSource, FrontendLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 from launch.substitutions import PathJoinSubstitution
@@ -67,18 +68,21 @@ def generate_launch_description():
         emulate_tty=True
     )
 
-    delay_coordinator = TimerAction(
-        period=10.0,
-        actions=[coordinator_node]
+    start_coordinator_after_planner = RegisterEventHandler(
+        event_handler=OnProcessStart(
+            target_action=planner_node,
+            on_start=[
+                LogInfo(msg='Planner started, now launching Coordinator...'),
+                coordinator_node
+            ]
+        )
     )
 
-    # Create launch descriptor.
     ld = LaunchDescription()
-    
     ld.add_action(assignment2_launch)
-    ld.add_action(planner_node)
     ld.add_action(apriltag_launch)
     ld.add_action(gripper_node)
-    ld.add_action(delay_coordinator)
+    ld.add_action(planner_node)
+    ld.add_action(start_coordinator_after_planner)
 
     return ld
