@@ -125,3 +125,12 @@ To do that you need edit the global launch file like so:
         ]
     )
 ```
+
+
+
+## Contributors
+
+- Luca Piai: [Github](https://github.com/luca037)
+- Alessandro Chinello: [Github](https://github.com/Ale10chine)
+- Mattia Scantamburlo: [Github](https://github.com/Daedalus02)
+
