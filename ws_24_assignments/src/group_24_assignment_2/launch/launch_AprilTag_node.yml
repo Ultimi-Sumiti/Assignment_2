@@ -22,7 +22,7 @@ launch:
         to: /rgb_camera/camera_info
         
       param:
-      - from: $(find-pkg-share hello_moveit)/cfg/tags_36h11.yaml
+      - from: $(find-pkg-share group_24_assignment_2)/cfg/tags_36h11.yaml
 
       extra_arg:
       - name: use_intra_process_comms
