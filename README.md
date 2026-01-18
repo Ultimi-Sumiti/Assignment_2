@@ -126,7 +126,10 @@ To do that you need edit the global launch file like so:
     )
 ```
 
-
+After running the simulation you can plot the 2D trajectory by running
+```python
+python plot_traj2d.py
+```
 
 ## Contributors
 
