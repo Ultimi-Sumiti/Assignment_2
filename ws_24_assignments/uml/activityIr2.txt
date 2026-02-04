@@ -1,0 +1,46 @@
+@startuml
+
+participant APN as "AprilTagNode" #A9D0F5
+participant TF as "/tf" #A9D0F5
+participant CAC as "CoordinatorActionClient" #FFD480
+participant PAS  as "PlannerActionServer" #FFD480
+participant GM as "/gripper_move" #A9D0F5
+participant GS as "/gripper_status" #A9D0F5
+participant Gripper #FFD480
+
+activate APN
+APN -> TF : Publish
+deactivate APN
+activate TF 
+CAC --> TF : Read
+deactivate TF
+activate CAC
+
+loop until last step reached
+    CAC -> GM: Publish
+    activate GM
+    Gripper --> GM : Read
+    deactivate GM
+    activate Gripper
+    Gripper -> Gripper : Move gripper
+    CAC -> CAC : Wait motion execution
+    Gripper -> GS : Publish
+    deactivate Gripper
+    activate GS
+    CAC --> GS : Read
+    deactivate GS
+    
+    CAC -> PAS : Request
+    activate PAS
+    PAS -> PAS : Plan motion
+    PAS -> PAS : Execute motion
+    loop until success
+        PAS --> CAC : Feedback
+    end
+    PAS --> CAC : Result
+    deactivate PAS
+end
+
+deactivate CAC
+
+@enduml

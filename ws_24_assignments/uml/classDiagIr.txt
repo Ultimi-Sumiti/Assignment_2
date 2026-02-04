@@ -1,0 +1,74 @@
+@startuml
+hide empty members
+
+skinparam class {
+    BackgroundColor #FFD480
+    BorderColor Black
+    ArrowColor Black
+}
+
+class AprilTagNode
+
+class CoordinatorActionClient {
+    - action_client
+    - current_pose
+    - tag1_pos
+    - tag10_pos
+    - plan
+    - step_index
+    - grip_pub
+    - grip_sub
+    + init_plan()
+    + read_gripper_status(BoolMsg)
+    + add_boxes()
+    + init_tags_position()
+    + send_goal()
+}
+
+class PlannerActionServer {
+    - action_server
+    - planner_group
+    - plan
+    + init_moveit()
+    + free_cartesian()
+    + path_cartesian()
+    + execute()
+}
+
+class Gripper {
+    - publisher
+    - subscription
+    - gripper_group
+    + read_joint_val(StrMsg)
+    + init_moveit()
+    + move_gripper(float)
+}
+
+object "/gripper_status" as GS_TOPIC #A9D0F5 {
+    type: topic
+}
+
+object "/gripper_move" as GM_TOPIC #A9D0F5 {
+    type: topic
+}
+
+object "/tf" as TF_TOPIC #A9D0F5 {
+    type: topic
+}
+
+GM_TOPIC -[hidden]down- GS_TOPIC
+
+AprilTagNode -right[#Blue]-> TF_TOPIC : Publish
+TF_TOPIC -up[#Blue]-> CoordinatorActionClient: Read
+
+CoordinatorActionClient -right[#Blue]-> GM_TOPIC : Publish 
+CoordinatorActionClient <-[#Blue]up- GS_TOPIC : Read
+
+Gripper <-left[#Blue]- GM_TOPIC : Read 
+Gripper -left[#Blue]-> GS_TOPIC : Publish
+
+CoordinatorActionClient -left[#RED]-> PlannerActionServer : Request
+PlannerActionServer -right[#RED]-> CoordinatorActionClient: Feedback
+PlannerActionServer -right[#RED]-> CoordinatorActionClient: Result
+
+@enduml
